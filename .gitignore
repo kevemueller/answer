@@ -1,0 +1,4 @@
+cache/
+build-*/
+ksysroot-*/
+.DS_Store
