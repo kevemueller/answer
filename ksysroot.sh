@@ -6,6 +6,15 @@ MKTEMP=mktemp
 READLINK=readlink
 TAR=tar
 
+case "$(uname -s)" in
+    Darwin)
+        NATIVE_LINKER=ld64.lld
+        ;;
+    *)
+        NATIVE_LINKER=ld.lld
+        ;;
+esac
+
 BREW_PREFIX_LLVM=${BREW_PREFIX_LLVM:-$(brew --prefix llvm)}
 BREW_PREFIX_LLD=${BREW_PREFIX_LLD:-$(brew --prefix lld)}
 BREW_PREFIX_PKGCONF=${BREW_PREFIX_PKGCONF:-$(brew --prefix pkgconf)}
@@ -73,7 +82,7 @@ emit_meta_llvm() {
 
     local pkg_config=
 
-    if [ ${name} == "native" ]; then
+    if [ ${name} = "native" ]; then
         pkg_config="'${BREW_PREFIX_PKGCONF}/bin/pkg-config'"
     else
         pkg_config="ksysroot_dir_${name} / 'bin' / triple+'-pkg-config'"
@@ -256,9 +265,9 @@ ksysroot_native() {
     local target_dir="$1"
     local target_dir_abs="$(${READLINK} -f ${target_dir})"
 
-    mk_wrappers native ${target_dir_abs} "N/A" ld64.lld
+    mk_wrappers native ${target_dir_abs} "N/A" ${NATIVE_LINKER}
     emit_meta_env native ${target_dir_abs} > ${target_dir}/env
-    emit_meta_llvm native ${target_dir_abs} ld64.lld > ${target_dir}/native.txt
+    emit_meta_llvm native ${target_dir_abs} ${NATIVE_LINKER} > ${target_dir}/native.txt
 }
 
 ksysroot_debian() {
@@ -300,7 +309,7 @@ ksysroot_debian() {
     mk_wrappers ${triple} ${target_dir_abs} ${target_dir_abs}/cross ld.lld 
     emit_meta_env ${triple} ${target_dir_abs} > ${target_dir}/env
     emit_meta_pc ${triple} ${target_dir_abs} > ${target_dir}/pkg-config.personality
-    emit_meta_llvm native ${target_dir_abs} ld64.lld > ${target_dir}/native.txt
+    emit_meta_llvm native ${target_dir_abs} ${NATIVE_LINKER} > ${target_dir}/native.txt
     emit_meta_llvm_cross cross ${triple} ${target_dir_abs} ld.lld linux ${meson_cpufamily} ${meson_cpu} ${meson_endian} > ${target_dir}/cross.txt
 }
 
@@ -409,7 +418,7 @@ ksysroot_freebsd() {
     emit_meta_env ${triple} ${target_dir_abs}/cross > ${target_dir}/env
     emit_meta_pc ${triple} ${target_dir_abs}/cross > ${target_dir}/pkg-config.personality
 
-    emit_meta_llvm native ${target_dir_abs} ld64.lld > ${target_dir}/native.txt
+    emit_meta_llvm native ${target_dir_abs} ${NATIVE_LINKER} > ${target_dir}/native.txt
     emit_meta_llvm_cross cross ${triple} ${target_dir_abs} ${target_dir_abs}/cross ld.lld  freebsd ${meson_cpufamily} ${meson_cpu} ${meson_endian} > ${target_dir}/cross.txt
     cat >> ${target_dir}/cross.txt <<EOF
 pkg_config_path = sysroot / 'usr/local/libdata/pkgconfig' + ':' + sysroot / 'usr/libdata/pkgconfig'
@@ -511,5 +520,3 @@ case "$1" in
         exit 1
         ;;
 esac
-
-
