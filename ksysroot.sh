@@ -2,9 +2,11 @@
 set -e
 
 CURL=curl
+FIND=find
 MKTEMP=mktemp
 READLINK=readlink
 TAR=tar
+XARGS=xargs
 
 case "$(uname -s)" in
     Darwin)
@@ -32,6 +34,11 @@ emit_meta_env() {
     local sysroot="$2"
 
     cat <<EOF
+#!/bin/sh
+if [ \$# -ne 0 ]; then
+	set -a
+fi
+
 LLVM_DIR=${BREW_PREFIX_LLVM}
 LLD_DIR=${BREW_PREFIX_LLD}
 
@@ -53,6 +60,10 @@ READELF=\${LLVM_DIR}/bin/llvm-readelf
 SIZE=\${LLVM_DIR}/bin/llvm-size
 STRINGS=\${LLVM_DIR}/bin/llvm-strings
 STRIP=\${LLVM_DIR}/bin/llvm-strip
+
+if [ \$# -ne 0 ]; then
+	exec "\$@"
+fi
 EOF
 }
 
@@ -197,6 +208,8 @@ cache() {
     local url="$1"
     local base="${2:-$(basename ${url})}"
     local cache_file="${CACHE_DIR}/${base}"
+    >&2 echo Caching "${url}" to "${cache_file}"
+    echo "${url}" > ${cache_file}.url
     test -f "${cache_file}" || ${CURL} --fail -o "${cache_file}" "${url}"
     echo ${cache_file}
 }
@@ -266,7 +279,8 @@ ksysroot_native() {
     local target_dir_abs="$(${READLINK} -f ${target_dir})"
 
     mk_wrappers native ${target_dir_abs} "N/A" ${NATIVE_LINKER}
-    emit_meta_env native ${target_dir_abs} > ${target_dir}/env
+    emit_meta_env native ${target_dir_abs} > ${target_dir}/bin/native-env
+    chmod +x ${target_dir}/bin/native-env
     emit_meta_llvm native ${target_dir_abs} ${NATIVE_LINKER} > ${target_dir}/native.txt
 }
 
@@ -307,7 +321,8 @@ ksysroot_debian() {
     test -d ${target_dir}/lib64 && ln -s ../../lib64 ${target_dir}/usr/${triple}/lib64
 
     mk_wrappers ${triple} ${target_dir_abs} ${target_dir_abs}/cross ld.lld 
-    emit_meta_env ${triple} ${target_dir_abs} > ${target_dir}/env
+    emit_meta_env ${triple} ${target_dir_abs} > ${target_dir}/bin/${triple}-env
+    chmod +x ${target_dir}/bin/${triple}-env
     emit_meta_pc ${triple} ${target_dir_abs} > ${target_dir}/pkg-config.personality
     emit_meta_llvm native ${target_dir_abs} ${NATIVE_LINKER} > ${target_dir}/native.txt
     emit_meta_llvm_cross cross ${triple} ${target_dir_abs} ld.lld linux ${meson_cpufamily} ${meson_cpu} ${meson_endian} > ${target_dir}/cross.txt
@@ -412,10 +427,12 @@ ksysroot_freebsd() {
 
     mkdir "${target_dir}/cross"
     ${TAR} -C "${target_dir}/cross" -xf ${base_file} ./lib ./usr/lib ./usr/include ./usr/libdata/pkgconfig/
-
+    # Brew removes empty directories, Clang is confused and starts mixing-in system headers despite sysroot
+    ${FIND} "${target_dir}/cross" -type d -empty | ${XARGS} -I'{}' touch '{}'/.empty
 
     mk_wrappers ${triple} ${target_dir_abs} ${target_dir_abs}/cross ld.lld
-    emit_meta_env ${triple} ${target_dir_abs}/cross > ${target_dir}/env
+    emit_meta_env ${triple} ${target_dir_abs}/cross > ${target_dir}/bin/${triple}-env
+    chmod +x ${target_dir}/bin/${triple}-env
     emit_meta_pc ${triple} ${target_dir_abs}/cross > ${target_dir}/pkg-config.personality
 
     emit_meta_llvm native ${target_dir_abs} ${NATIVE_LINKER} > ${target_dir}/native.txt
