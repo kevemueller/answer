@@ -1,0 +1,295 @@
+# shellcheck shell=sh
+
+: "${CURL:=curl}"
+: "${FIND:=find}"
+
+
+### tools
+
+quote_snippet() {
+    for i in "$@"; do
+        set -- "$@" \'"$i"\'
+    done
+}
+
+join_with_prefix() {
+    local separator="$1"
+    local prefix="$2"
+    shift 2
+
+    printf "%s" "${prefix}$1"
+    shift
+    while [ $# -gt 0 ]; do
+        printf "%s" "${separator}${prefix}$1"
+        shift
+    done
+}
+
+# create a wrapper with additional prepended arguments
+# if no arguments are given, a symlink will do
+mk_wrapper() {
+    local tgt_file="$1"
+    shift
+    if [ $# -eq 1 ]; then
+        ln -s "$1" "${tgt_file}"
+    else
+        cat >"${tgt_file}" <<EOF
+#!/bin/sh
+exec $@ "\$@"
+EOF
+        chmod +x "${tgt_file}"
+    fi
+}
+
+
+
+cache() {
+    local url="$1"
+    local base="${2:-$(basename "${url}")}"
+    local cache_file="${CACHE_DIR}/${base}"
+    >&2 echo Caching "${url}" to "${cache_file}"
+    echo "${url}" > "${cache_file}".url
+    test -f "${cache_file}" || ${CURL} --fail -o "${cache_file}" "${url}"
+    echo "${cache_file}"
+}
+
+fix_abs_link() {
+    local file
+    local abs_link
+    local dir
+
+    ${FIND} "$1" -lname "/*" | while IFS= read -r file; do
+        abs_link="$(readlink "${file}")"
+        dir="$(dirname "${file}")"
+        dir="$(echo "${dir#"$1"}" | sed -E 's%/([^/]+)%../%g')"
+        dir="${dir%/}"
+        ln -sf "${dir}${abs_link}" "${file}"
+    done
+}
+
+
+# unpack the Debian archive passed in $2 into existing directory $1
+# pass remaining args to actual extractor
+undeb() {
+    local target="$1"
+    local debfile="$2"
+    shift 2
+	${TAR} -Oxzf "${debfile}" data.tar.xz  | ${TAR} -C "${target}" -xz "$@"
+}
+
+
+### emitters
+
+
+# environment definition for legacy tooling
+# we use the wrappers
+emit_meta_env() {
+    cat <<EOF
+#!/bin/sh
+if [ \$# -ne 0 ]; then
+	set -a
+fi
+
+LLVM_DIR=${BREW_PREFIX_LLVM}
+LLD_DIR=${BREW_PREFIX_LLD}
+
+LLVM_CONFIG=\${LLVM_DIR}/bin/llvm-config
+PKG_CONFIG=${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-pkg-config
+PKG_CONFIG_FOR_BUILD=${BREW_PREFIX_PKGCONF}/bin/pkg-config
+
+CC=${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cc
+CC_FOR_BUILD=\${LLVM_DIR}/bin/clang
+CXX=${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-c++
+CXX_FOR_BUILD=\${LLVM_DIR}/bin/clang++
+CPP=${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cpp
+CPP_FOR_BUILD=\${LLVM_DIR}/bin/clang-cpp
+LD=${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-ld
+LD_FOR_BUILD=\${LLD_DIR}/bin/${NATIVE_LINKER}
+
+AR=\${LLVM_DIR}/bin/llvm-ar
+AS=\${LLVM_DIR}/bin/llvm-as
+NM=\${LLVM_DIR}/bin/llvm-nm
+OBJCOPY=\${LLVM_DIR}/bin/llvm-objcopy
+OBJDUMP=\${LLVM_DIR}/bin/llvm-objdump
+RANLIB=\${LLVM_DIR}/bin/llvm-ranlib
+READELF=\${LLVM_DIR}/bin/llvm-readelf
+SIZE=\${LLVM_DIR}/bin/llvm-size
+STRINGS=\${LLVM_DIR}/bin/llvm-strings
+STRIP=\${LLVM_DIR}/bin/llvm-strip
+
+if [ \$# -ne 0 ]; then
+	exec "\$@"
+fi
+EOF
+}
+
+
+# emit cross pkg-config personality
+# $1 - libpath
+# $@ - pkgconfig_paths
+emit_meta_pc() {
+    local libpath="$1"
+    shift 1
+    local pkgconfig_paths
+    pkgconfig_paths="$(join_with_prefix : "${KSYSROOT_SYSROOT}" "$@")"
+
+    cat <<EOF
+Triplet: ${KSYSROOT_FULL_TRIPLE}
+SysrootDir: ${KSYSROOT_SYSROOT}
+DefaultSearchPaths: ${pkgconfig_paths}
+SystemIncludePaths: ${KSYSROOT_SYSROOT}/usr/include
+SystemLibraryPaths: ${KSYSROOT_SYSROOT}${libpath}
+EOF
+}
+
+# emit generic meson cross/native files
+# useful Meson constants:
+#   sysroot -- our sysroot
+#   triple  -- our triple
+#   BREW_PREFIX_LLVM_${name} - directory to llvm
+# With Meson we don't need to use the wrappers! 
+emit_meta_llvm() {
+    local name="$1"
+    local ld
+
+    local pkg_config=
+
+    if [ "${name}" = "native" ]; then
+        pkg_config="'${BREW_PREFIX_PKGCONF}/bin/pkg-config'"
+        ld="${NATIVE_LINKER}"
+    else
+        pkg_config="ksysroot_dir_${name} / 'bin' / triple + '-pkg-config'"
+        ld="${KSYSROOT_LINKER}"
+    fi
+
+    cat <<EOF
+[binaries]
+llvm-config = llvm_dir_${name} / 'bin/llvm-config'
+pkg-config = ${pkg_config}
+
+c = llvm_dir_${name} / 'bin/clang'
+c_ld = lld_dir_${name} / 'bin/${ld}'
+cpp = llvm_dir_${name} / 'bin/clang++'
+cpp_ld = lld_dir_${name} / 'bin/${ld}'
+
+ar = llvm_dir_${name} / 'bin/llvm-ar'
+as = llvm_dir_${name} / 'bin/llvm-as'
+ld = lld_dir_${name} / 'bin/${ld}'
+nm = llvm_dir_${name} / 'bin/llvm-nm'
+objcopy = llvm_dir_${name} / 'bin/llvm-objcopy'
+objdump = llvm_dir_${name} / 'bin/llvm-objdump'
+ranlib = llvm_dir_${name} / 'bin/llvm-ranlib'
+readelf = llvm_dir_${name} / 'bin/llvm-readelf'
+size = llvm_dir_${name} / 'bin/llvm-size'
+strings = llvm_dir_${name} / 'bin/llvm-strings'
+strip = llvm_dir_${name} / 'bin/llvm-strip'
+
+[constants]
+llvm_dir_${name} = '${BREW_PREFIX_LLVM}'
+lld_dir_${name} = '${BREW_PREFIX_LLD}'
+ksysroot_dir_${name} = '${KSYSROOT_PREFIX_ABS}'
+EOF
+}
+
+# emit meson cross files (complete with generic part)
+# $1 - name
+# $@ - pkg_config paths
+emit_meta_llvm_cross() {
+    local name="$1"
+    shift
+    local first=yes
+
+    for i in "$@"; do
+        if [ "${first}" = "yes" ]; then
+            set --
+            first=no
+        fi
+        set -- "$@" \'"${i#/}"\'
+    done
+    local pkgconfig_paths
+    pkgconfig_paths="$(join_with_prefix " + ':' + " "sysroot / " "$@")"
+
+    emit_meta_llvm "${name}"
+
+    cat <<EOF
+triple = '${KSYSROOT_FULL_TRIPLE}'
+sysroot = '${KSYSROOT_SYSROOT}'
+common_args = ['-target', triple, '--sysroot=' + sysroot]
+
+[properties]
+needs_exe_wrapper = true
+sys_root = sysroot
+
+[host_machine]
+system = '${MESON_SYSTEM}'
+cpu_family = '${MESON_CPUFAMILY}'
+cpu = '${MESON_CPU}'
+endian = '${MESON_ENDIAN}'
+
+[built-in options]
+c_args = common_args
+cpp_args = common_args
+c_link_args = common_args
+cpp_link_args = common_args
+pkg_config_path = ${pkgconfig_paths}
+EOF
+}
+
+
+# create wrappers for legacy uses
+mk_wrappers() {
+    mkdir -p "${KSYSROOT_PREFIX_ABS}"/bin
+    local sysroot_args=
+    local common_args=
+    local pkgconf_args=
+
+    if [ "${KSYSROOT_TRIPLE}" != "native" ]; then
+        sysroot_args="--sysroot=${KSYSROOT_SYSROOT}"
+        common_args="-target ${KSYSROOT_FULL_TRIPLE} ${sysroot_args}"
+        pkgconf_args="--personality=${KSYSROOT_PREFIX_ABS}/pkg-config.personality"
+    fi
+    # shellcheck disable=SC2086
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-pkg-config" "${BREW_PREFIX_PKGCONF}"/bin/pkg-config ${pkgconf_args}
+    # shellcheck disable=SC2086
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cc" "${BREW_PREFIX_LLVM}"/bin/clang ${common_args} -fuse-ld="${BREW_PREFIX_LLD}"/"${KSYSROOT_LINKER}"
+    # shellcheck disable=SC2086
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-c++" "${BREW_PREFIX_LLVM}"/bin/clang++ ${common_args} -fuse-ld="${BREW_PREFIX_LLD}"/"${KSYSROOT_LINKER}"
+    # shellcheck disable=SC2086
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cpp" "${BREW_PREFIX_LLVM}"/bin/clang-cpp ${common_args}
+    # shellcheck disable=SC2086
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-ld" "${BREW_PREFIX_LLD}"/bin/"${KSYSROOT_LINKER}" ${sysroot_args}
+
+    if [ "${KSYSROOT_TRIPLE}" != "${KSYSROOT_FULL_TRIPLE}" ]; then
+        for i in pkg-config cc c++ cpp ld; do
+            mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_TRIPLE}-$i" "${KSYSROOT_FULL_TRIPLE}-$i"
+        done
+    fi
+}
+
+### common code
+
+ksysroot_prefix() {
+    KSYSROOT_PREFIX="$1"
+    mkdir -p "${KSYSROOT_PREFIX}"
+    KSYSROOT_PREFIX_ABS="$(${READLINK} -f "${KSYSROOT_PREFIX}")"
+    KSYSROOT_SYSROOT="${KSYSROOT_PREFIX_ABS}/cross"
+}
+
+# $1 - libpath
+# $@ - pkg-config-paths
+ksysroot_emit() {
+    local libpath="$1"
+    shift
+
+    1>&2 echo KSYSROOT_TRIPLE="${KSYSROOT_TRIPLE}" KSYSROOT_FULL_TRIPLE="${KSYSROOT_FULL_TRIPLE}"
+    1>&2 echo KSYSROOT_LINKER="${KSYSROOT_LINKER}"
+
+    mk_wrappers
+    emit_meta_env > "${KSYSROOT_PREFIX_ABS}"/bin/"${KSYSROOT_FULL_TRIPLE}"-env
+    chmod +x "${KSYSROOT_PREFIX_ABS}"/bin/"${KSYSROOT_FULL_TRIPLE}"-env
+    emit_meta_llvm native  > "${KSYSROOT_PREFIX}"/native.txt
+    if [ "${KSYSROOT_TRIPLE}" != "native" ]; then
+        emit_meta_pc "${libpath}" "$@" > "${KSYSROOT_PREFIX}"/pkg-config.personality
+        emit_meta_llvm_cross cross  "$@" > "${KSYSROOT_PREFIX}"/cross.txt
+    fi
+}

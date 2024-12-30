@@ -1,0 +1,29 @@
+# shellcheck shell=sh
+
+ksysroot_native_meta() {
+    KSYSROOT_FLAVOUR=
+    MESON_CPUFAMILY=
+    MESON_CPU=
+    MESON_ENDIAN=
+    MESON_SYSTEM=
+
+    KSYSROOT_TRIPLE=native
+    KSYSROOT_FULL_TRIPLE="$("${BREW_PREFIX_LLVM}"/bin/clang-cpp -print-target-triple)"
+    KSYSROOT_LINKER="${NATIVE_LINKER}"
+}
+
+ksysroot_native_bom() {
+    ksysroot_native_meta
+}
+
+ksysroot_native_frombom() {
+    ksysroot_prefix "${2:-ksysroot-${1:-native}}"
+    ksysroot_native_meta
+    ksysroot_emit
+}
+
+ksysroot_native_install() {
+    ksysroot_prefix "${2:-ksysroot-${1:-native}}"
+    ksysroot_native_meta
+    ksysroot_emit
+}

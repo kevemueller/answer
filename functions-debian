@@ -1,0 +1,204 @@
+# shellcheck shell=sh
+
+: "${DEBOOTSTRAP:="/usr/local/sbin/debootstrap"}"
+: "${MKTEMP:="mktemp"}"
+: "${TAR:="tar"}"
+
+
+
+# set variables describing the sysroot
+# $1 - flavoured base triple
+#   e.g. aarch64-linux-gnu@debian12
+# sets
+# * KSYSROOT_FLAVOUR
+# * DEBIAN_NAME, DEBIAN_VERSION, DEBIAN_GCC, DEBIAN_ARCH
+# * MESON_CPU, MESON_CPUFAMILY, MESON_ENDIAN, MESON_SYSTEM
+ksysroot_debian_meta() {
+    local basetriple="${1%@*}"
+    local flavour="${1#*@}"
+
+    DEBIAN_VERSION="${flavour#debian}"
+    1>&2 echo input="$1" basetriple="${basetriple}" flavour="${flavour}"
+
+    # /usr/local/sbin/debootstrap --print-debs --arch=amd64  --cache-dir=$PWD/cache/debian bullseye tmp | grep "gcc.*base"
+    case "${DEBIAN_VERSION}" in
+        10)
+            DEBIAN_NAME="buster"
+            DEBIAN_GCC="8"
+            ;;
+        11)
+            DEBIAN_NAME="bullseye"
+            DEBIAN_GCC="10"
+            ;;
+        12) 
+            DEBIAN_NAME="bookworm"
+            DEBIAN_GCC="12"
+            ;;
+        13) DEBIAN_NAME="trixie"
+            DEBIAN_GCC="14"
+            ;;
+        14) DEBIAN_NAME="forky"
+            DEBIAN_GCC="14"
+            ;;
+        *)  echo Unknown debian version "${DEBIAN_VERSION}"
+            return 1;
+            ;;
+    esac
+    KSYSROOT_FLAVOUR=debian"${DEBIAN_VERSION}"
+
+    1>&2 echo DEBIAN_VERSION="${DEBIAN_VERSION}" DEBIAN_NAME="${DEBIAN_NAME}"  DEBIAN_GCC="${DEBIAN_GCC}"
+
+    case "${basetriple}" in 
+        aarch64-linux*-gnu)      
+            DEBIAN_ARCH=arm64
+            MESON_CPUFAMILY="aarch64"
+            ;;
+        i686-linux*-gnu)         
+            DEBIAN_ARCH=i386
+            MESON_CPUFAMILY="x86"
+            ;;
+        powerpc64-linux*-gnu)    
+            DEBIAN_ARCH=ppc64
+            MESON_CPUFAMILY="ppc64"
+            ;;
+        x86_64-linux*-gnu)       
+            DEBIAN_ARCH=amd64 
+            MESON_CPUFAMILY="x86_64"
+            ;;
+        *)                      
+            DEBIAN_ARCH=unknown
+            MESON_CPUFAMILY="unknown"
+            ;;
+    esac
+    MESON_CPU=${MESON_CPUFAMILY}
+    : "${MESON_ENDIAN:=little}"
+    MESON_SYSTEM="linux"
+
+    1>&2 echo DEBIAN_ARCH="${DEBIAN_ARCH}"
+    1>&2 echo MESON_SYSTEM="${MESON_SYSTEM}" MESON_CPUFAMILY="${MESON_CPUFAMILY}" MESON_CPU="${MESON_CPU}" MESON_ENDIAN="${MESON_ENDIAN}"
+}
+
+call_debootstrap() {
+    local cache_dir_abs
+    cache_dir_abs="$(readlink -f "${CACHE_DIR}")"
+    local db_tmp mixin
+    db_tmp="$(${MKTEMP} -d ksysroot-debootstrap-XXXXXX)"
+    mixin="$(${MKTEMP})"
+    cat > "${mixin}" <<EOF
+. "${DEBOOTSTRAP_DIR}"/scripts/"${SUITE}"
+
+work_out_debs () {
+	required="${FORCE_REQUIRED}"
+	base=""
+}
+EOF
+
+    1>&2 FORCE_REQUIRED="libstdc++-${DEBIAN_GCC}-dev" ${DEBOOTSTRAP} \
+        "$@" --arch="${DEBIAN_ARCH}" \
+        --cache-dir="${cache_dir_abs}"/debian \
+        "${DEBIAN_NAME}" "${db_tmp}" \
+        http://deb.debian.org/debian "${mixin}" 
+    rm "${mixin}"
+    echo "${db_tmp}"
+}
+
+debian_emit_bom() {
+    local db_tmp="$1"
+    lam "${db_tmp}"/debootstrap/deburis -s" " "${db_tmp}"/debootstrap/debpaths |
+        while read -r pkg version url pkgd file; do
+            test "${pkg}" = "${pkgd}" || echo mismatch at "${pkg}"
+            # 1>&2 echo PKG="${pkg}" URL="${url}" FILE="$(basename "${file}")"
+            printf "%s %s %s %s\n" "${pkg}" "${version}" "${url}" debian/"$(basename "${file}")"
+        done
+}
+
+fixup() {
+    fix_abs_link "${KSYSROOT_SYSROOT}"
+
+    for i in "${KSYSROOT_SYSROOT}"/usr/lib*; do
+        local b
+        b="$(basename "$i")"
+        test -e "${KSYSROOT_SYSROOT}"/"$b" || ln -s usr/"$b" "${KSYSROOT_SYSROOT}"/"$b"
+    done
+
+    KSYSROOT_TRIPLE="$(basename "$(ls -d "${KSYSROOT_SYSROOT}"/usr/lib/*gnu)")"
+    KSYSROOT_FULL_TRIPLE="${KSYSROOT_TRIPLE%linux*-gnu}linux${linux_version}-gnu"
+    KSYSROOT_LINKER="ld.lld"
+
+    ksysroot_emit /usr/lib/"${KSYSROOT_TRIPLE}" /usr/lib/"${KSYSROOT_TRIPLE}"/pkgconfig
+}
+
+# $1 - flavoured base triple
+# emits the URLs that are required to build the sysroot
+# caches the downloaded DEBs in ${CACHE_DIR}/debian
+# slow, as it needs to download the DEBs
+ksysroot_debian_bom() {
+    local db_tmp
+
+    ksysroot_debian_meta "$1"
+    db_tmp="$(call_debootstrap --download-only)"
+    debian_emit_bom "${db_tmp}"
+
+    rm -rf "${db_tmp}"
+}
+
+# $1 - flavoure triple
+# $2 - target directory 
+# stdin - BOM
+ksysroot_debian_frombom() {
+    ksysroot_prefix "${2:-ksysroot-$1}"
+
+    local linux_version
+
+    ksysroot_debian_meta "$1"
+
+    mkdir -p "${KSYSROOT_SYSROOT}"
+
+    # NB: HFS+ is case preserving, not case-sensitive, hence 
+    # usr/include/linux/netfilter/xt_CONNMARK.h and usr/include/linux/netfilter/xt_connmark.h
+    # will overwrite each other
+    while read -r pkg version url file; do
+        1>&2 echo "${pkg}" is from "${url}" in "$(ls "${CACHE_DIR}/${file}")"
+        if [ "${pkg}" = linux-libc-dev ]; then
+            local suffix="${version#*.*.}"
+            linux_version="${version%."${suffix}"}"
+        fi
+        cache "${url}" "${file}"
+        undeb "${KSYSROOT_SYSROOT}" "${CACHE_DIR}/${file}" \
+            --exclude ./etc --exclude "./*bin" --exclude "./*/*bin" --exclude ./var \
+            -s '%\./lib\(.*\)%./usr/lib\1%'
+    done
+
+    fixup
+}
+
+# $1 - flavoured base triple
+# $2 - target directory
+#   e.g. aarch64-linux-gnu@debian12
+ksysroot_debian_install() {
+    ksysroot_prefix "${2:-ksysroot-$1}"
+
+    local db_tmp
+    local cache_dir_abs
+    cache_dir_abs="$(readlink -f "${CACHE_DIR}")"
+
+    ksysroot_debian_meta "$1"
+
+    mkdir -p "${cache_dir_abs}"/debian
+
+    db_tmp="$(call_debootstrap --unprivileged --merged-usr --foreign)"
+
+    local linux_version
+    linux_version="$(debian_emit_bom "${db_tmp}" | sed -nE 's/^linux-libc-dev[[:space:]]+([0-9]+)\.([0-9]+).*$/\1.\2/p')"
+
+    rm -rf "${db_tmp:?}"/usr/*bin
+    mkdir -p "${KSYSROOT_SYSROOT}"
+
+    for i in lib lib64 usr; do
+        test -e "${db_tmp}/${i}" && mv "${db_tmp}/${i}" "${KSYSROOT_SYSROOT}/${i}"
+    done
+
+    rm -rf "${db_tmp}"
+
+    fixup
+}
