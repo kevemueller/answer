@@ -1,4 +1,5 @@
 # shellcheck shell=sh
+set -e
 
 : "${XARGS:="xargs"}"
 
@@ -72,14 +73,12 @@ ksysroot_freebsd_meta() {
     : "${MESON_ENDIAN:=little}"
     MESON_SYSTEM="freebsd"
 
+    KSYSROOT_OSFLAVOUR="freebsd"
+    KSYSROOT_OSRELEASE="${FREEBSD_VERSION}"
     KSYSROOT_TRIPLE="${basetriple}"
     # x86_64-unknown-freebsd13.2
     KSYSROOT_FULL_TRIPLE="${basetriple}"
     KSYSROOT_LINKER="ld.lld"
-
-    1>&2 echo FREEBSD_VERSION="${FREEBSD_VERSION}" FREEBSD_MACHINE="${FREEBSD_MACHINE}" FREEBSD_MACHINE_ARCH="${FREEBSD_MACHINE_ARCH}"
-    1>&2 echo KSYSROOT_TRIPLE="${KSYSROOT_TRIPLE}" KSYSROOT_FULL_TRIPLE="${KSYSROOT_FULL_TRIPLE}" KSYSROOT_LINKER="${KSYSROOT_LINKER}"
-    1>&2 echo MESON_SYSTEM="${MESON_SYSTEM}" MESON_CPUFAMILY="${MESON_CPUFAMILY}" MESON_CPU="${MESON_CPU}" MESON_ENDIAN="${MESON_ENDIAN}"
 }
 
 # $1 - flavoured base triple
@@ -100,49 +99,33 @@ ksysroot_freebsd_bom() {
             return 1
             ;;
     esac
+    ksysroot_bomconstants
+    printf "# FREEBSD_VERSION=%s FREEBSD_MACHINE=%s FREEBSD_MACHINE_ARCH=%s\n" "${FREEBSD_VERSION}" "${FREEBSD_MACHINE}" "${FREEBSD_MACHINE_ARCH}"
     printf "%s %s %s %s\n" "base.txz" "${FREEBSD_VERSION}" \
      "${freebsd_base_url}/${FREEBSD_MACHINE}/${FREEBSD_MACHINE_ARCH}/${FREEBSD_VERSION}/base.txz" \
      "freebsd/${FREEBSD_MACHINE}_${FREEBSD_MACHINE_ARCH}_freebsd${FREEBSD_VERSION}-base.txz"
 }
 
-ksysroot_freebsd_frombom() {
-    ksysroot_prefix "${2:-ksysroot-$1}"
 
-    ksysroot_freebsd_meta "$1"
-    mkdir -p "${KSYSROOT_SYSROOT}"
-    local pkg version url file
-    while read -r pkg version url file; do
-        1>&2 echo PKG="${pkg}" URL="${url}" FILE="${file}"
-        cache "${url}" "${file}"
-        ${TAR} -C "${KSYSROOT_SYSROOT}" -xf "${CACHE_DIR}/${file}" ./lib ./usr/lib ./usr/include ./usr/libdata/pkgconfig
-    done
+ksysroot_freebsd_bomresource() {
+    local pkg="$1"
+    local version="$2"
+    local url="$3"
+    local file="$4"
 
+    cache "${url}" "${file}"
+    ${TAR} -C "${KSYSROOT_SYSROOT}" -xf "${CACHE_DIR}/${file}" ./lib ./usr/lib ./usr/include ./usr/libdata/pkgconfig
+}
+
+ksysroot_freebsd_bomclose() {
     # Brew removes empty directories, keep them
     ${FIND} "${KSYSROOT_SYSROOT}" -type d -empty | ${XARGS} -I'{}' touch '{}'/.empty
     fix_abs_link "${KSYSROOT_SYSROOT}"
-
     ksysroot_emit /usr/lib /usr/local/libdata/pkgconfig /usr/libdata/pkgconfig
-
-    # NB: HFS+ is case preserving, not case-sensitive, hence 
-    # usr/include/linux/netfilter/xt_CONNMARK.h and usr/include/linux/netfilter/xt_connmark.h
-    # will overwrite each other
-    while read -r pkg version url file; do
-        1>&2 echo "${pkg}" is from "${url}" in "$(ls "${CACHE_DIR}/${file}")"
-        if [ "${pkg}" = linux-libc-dev ]; then
-            local suffix="${version#*.*.}"
-            linux_version="${version%."${suffix}"}"
-        fi
-        cache "${url}" "${file}"
-        undeb "${KSYSROOT_SYSROOT}" "${CACHE_DIR}/${file}" \
-            --exclude ./etc --exclude "./*bin" --exclude "./*/*bin" --exclude ./var \
-            -s '%\./lib\(.*\)%./usr/lib\1%'
-    done
-
-    fixup
 }
 
 ksysroot_freebsd_install() {
-    ksysroot_freebsd_bom "$1" | ksysroot_freebsd_frombom "$1" "$2"
+    ksysroot_freebsd_bom "$1" | ksysroot_frombom "$1" "$2"
 }
 
 ksysroot_freebsd_pkgbase() {

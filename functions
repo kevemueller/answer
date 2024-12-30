@@ -1,8 +1,8 @@
 # shellcheck shell=sh
+set -e
 
 : "${CURL:=curl}"
 : "${FIND:=find}"
-
 
 ### tools
 
@@ -66,17 +66,6 @@ fix_abs_link() {
         ln -sf "${dir}${abs_link}" "${file}"
     done
 }
-
-
-# unpack the Debian archive passed in $2 into existing directory $1
-# pass remaining args to actual extractor
-undeb() {
-    local target="$1"
-    local debfile="$2"
-    shift 2
-	${TAR} -Oxzf "${debfile}" data.tar.xz  | ${TAR} -C "${target}" -xz "$@"
-}
-
 
 ### emitters
 
@@ -281,9 +270,6 @@ ksysroot_emit() {
     local libpath="$1"
     shift
 
-    1>&2 echo KSYSROOT_TRIPLE="${KSYSROOT_TRIPLE}" KSYSROOT_FULL_TRIPLE="${KSYSROOT_FULL_TRIPLE}"
-    1>&2 echo KSYSROOT_LINKER="${KSYSROOT_LINKER}"
-
     mk_wrappers
     emit_meta_env > "${KSYSROOT_PREFIX_ABS}"/bin/"${KSYSROOT_FULL_TRIPLE}"-env
     chmod +x "${KSYSROOT_PREFIX_ABS}"/bin/"${KSYSROOT_FULL_TRIPLE}"-env
@@ -292,4 +278,29 @@ ksysroot_emit() {
         emit_meta_pc "${libpath}" "$@" > "${KSYSROOT_PREFIX}"/pkg-config.personality
         emit_meta_llvm_cross cross  "$@" > "${KSYSROOT_PREFIX}"/cross.txt
     fi
+}
+
+ksysroot_bomconstants() {
+    printf "# KSYSROOT_TRIPLE=%s KSYSROOT_FULL_TRIPLE=%s\n" "${KSYSROOT_TRIPLE}" "${KSYSROOT_FULL_TRIPLE}"
+    printf "# KSYSROOT_OSFLAVOUR=%s KSYSROOT_OSRELEASE=%s\n" "${KSYSROOT_OSFLAVOUR}" "${KSYSROOT_OSRELEASE}"
+    printf "# KSYSROOT_LINKER=%s\n" "${KSYSROOT_LINKER}"
+    printf "# MESON_SYSTEM=%s MESON_CPUFAMILY=%s MESON_CPU=%s MESON_ENDIAN=%s\n" "${MESON_SYSTEM}" "${MESON_CPUFAMILY}" "${MESON_CPU}" "${MESON_ENDIAN}"
+}
+
+# $1 - tgtprefix
+# $2 - optional file, stdin if empty
+ksysroot_frombom() {
+    ksysroot_prefix "$1"
+
+    mkdir -p "${KSYSROOT_SYSROOT}"
+    local pkg version url file
+    while read -r pkg version url file; do
+        1>&2 echo PKG="${pkg}" VERSION="${version}" URL="${url}" FILE="${file}"
+        if [ "${pkg}" = "#" ]; then
+            export $(echo ${version} ${url} ${file} | xargs)
+        else
+            ksysroot_"${KSYSROOT_OSFLAVOUR}"_bomresource "${pkg}" "${version}" "${url}" "${file}"
+        fi
+    done < "${2:-/dev/fd/0}"
+    ksysroot_"${KSYSROOT_OSFLAVOUR}"_bomclose
 }

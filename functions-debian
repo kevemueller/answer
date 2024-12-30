@@ -1,10 +1,18 @@
 # shellcheck shell=sh
+set -e
 
 : "${DEBOOTSTRAP:="/usr/local/sbin/debootstrap"}"
 : "${MKTEMP:="mktemp"}"
 : "${TAR:="tar"}"
 
 
+# unpack the Debian archive passed in $1
+# pass remaining args to actual extractor
+undeb() {
+    local debfile="$1"
+    shift
+	${TAR} -Oxzf "${debfile}" data.tar.xz  | ${TAR} -z "$@"
+}
 
 # set variables describing the sysroot
 # $1 - flavoured base triple
@@ -44,9 +52,8 @@ ksysroot_debian_meta() {
             return 1;
             ;;
     esac
-    KSYSROOT_FLAVOUR=debian"${DEBIAN_VERSION}"
-
-    1>&2 echo DEBIAN_VERSION="${DEBIAN_VERSION}" DEBIAN_NAME="${DEBIAN_NAME}"  DEBIAN_GCC="${DEBIAN_GCC}"
+    KSYSROOT_OSFLAVOUR="debian"
+    KSYSROOT_OSRELEASE="${DEBIAN_VERSION}"
 
     case "${basetriple}" in 
         aarch64-linux*-gnu)      
@@ -73,9 +80,7 @@ ksysroot_debian_meta() {
     MESON_CPU=${MESON_CPUFAMILY}
     : "${MESON_ENDIAN:=little}"
     MESON_SYSTEM="linux"
-
-    1>&2 echo DEBIAN_ARCH="${DEBIAN_ARCH}"
-    1>&2 echo MESON_SYSTEM="${MESON_SYSTEM}" MESON_CPUFAMILY="${MESON_CPUFAMILY}" MESON_CPU="${MESON_CPU}" MESON_ENDIAN="${MESON_ENDIAN}"
+    KSYSROOT_LINKER="ld.lld"
 }
 
 call_debootstrap() {
@@ -84,7 +89,7 @@ call_debootstrap() {
     local db_tmp mixin
     db_tmp="$(${MKTEMP} -d ksysroot-debootstrap-XXXXXX)"
     mixin="$(${MKTEMP})"
-    cat > "${mixin}" <<EOF
+    cat > "${mixin}" <<'EOF'
 . "${DEBOOTSTRAP_DIR}"/scripts/"${SUITE}"
 
 work_out_debs () {
@@ -98,6 +103,7 @@ EOF
         --cache-dir="${cache_dir_abs}"/debian \
         "${DEBIAN_NAME}" "${db_tmp}" \
         http://deb.debian.org/debian "${mixin}" 
+
     rm "${mixin}"
     echo "${db_tmp}"
 }
@@ -112,7 +118,7 @@ debian_emit_bom() {
         done
 }
 
-fixup() {
+debian_fixup() {
     fix_abs_link "${KSYSROOT_SYSROOT}"
 
     for i in "${KSYSROOT_SYSROOT}"/usr/lib*; do
@@ -122,54 +128,58 @@ fixup() {
     done
 
     KSYSROOT_TRIPLE="$(basename "$(ls -d "${KSYSROOT_SYSROOT}"/usr/lib/*gnu)")"
-    KSYSROOT_FULL_TRIPLE="${KSYSROOT_TRIPLE%linux*-gnu}linux${linux_version}-gnu"
-    KSYSROOT_LINKER="ld.lld"
+    KSYSROOT_FULL_TRIPLE="${KSYSROOT_TRIPLE%linux*-gnu}linux${LINUX_VERSION}-gnu"
 
     ksysroot_emit /usr/lib/"${KSYSROOT_TRIPLE}" /usr/lib/"${KSYSROOT_TRIPLE}"/pkgconfig
 }
 
 # $1 - flavoured base triple
-# emits the URLs that are required to build the sysroot
+# emits metadata and URLs that are required to build the sysroot
 # caches the downloaded DEBs in ${CACHE_DIR}/debian
-# slow, as it needs to download the DEBs
+# slow, as it needs to obtain archive index and download all DEBs
 ksysroot_debian_bom() {
     local db_tmp
 
     ksysroot_debian_meta "$1"
+    mkdir -p "${CACHE_DIR}"/debian
+
     db_tmp="$(call_debootstrap --download-only)"
+
+    LINUX_VERSION="$(sed -nE 's/^linux-libc-dev[[:space:]]+([0-9]+)\.([0-9]+).*$/\1.\2/p' "${db_tmp}"/debootstrap/deburis)"
+    LIBC6_DEB="$(sed -nE 's/^libc6 (.*)/\1/p' "${db_tmp}"/debootstrap/debpaths)"
+    KSYSROOT_TRIPLE="$(undeb "${db_tmp}${LIBC6_DEB}" --list ./usr/lib | sed -nE 's%^./usr/lib/(.*-linux-gnu)/.*$%\1%p' | uniq)"
+    KSYSROOT_FULL_TRIPLE="${KSYSROOT_TRIPLE%linux*-gnu}linux${LINUX_VERSION}-gnu"
+
+    ksysroot_bomconstants
+    printf "# DEBIAN_VERSION=%s DEBIAN_NAME=%s DEBIAN_GCC=%s\n" "${DEBIAN_VERSION}" "${DEBIAN_NAME}"  "${DEBIAN_GCC}"
+    printf "# DEBIAN_ARCH=%s LINUX_VERSION=%s\n" "${DEBIAN_ARCH}" "${LINUX_VERSION}"
     debian_emit_bom "${db_tmp}"
 
     rm -rf "${db_tmp}"
 }
 
-# $1 - flavoure triple
-# $2 - target directory 
-# stdin - BOM
-ksysroot_debian_frombom() {
-    ksysroot_prefix "${2:-ksysroot-$1}"
+ksysroot_debian_bomresource() {
+    local pkg="$1"
+    local version="$2"
+    local url="$3"
+    local file="$4"
 
-    local linux_version
-
-    ksysroot_debian_meta "$1"
-
-    mkdir -p "${KSYSROOT_SYSROOT}"
+    if [ "${pkg}" = linux-libc-dev ]; then
+        local suffix="${version#*.*.}"
+        LINUX_VERSION="${version%."${suffix}"}"
+    fi
+    cache "${url}" "${file}"
 
     # NB: HFS+ is case preserving, not case-sensitive, hence 
     # usr/include/linux/netfilter/xt_CONNMARK.h and usr/include/linux/netfilter/xt_connmark.h
     # will overwrite each other
-    while read -r pkg version url file; do
-        1>&2 echo "${pkg}" is from "${url}" in "$(ls "${CACHE_DIR}/${file}")"
-        if [ "${pkg}" = linux-libc-dev ]; then
-            local suffix="${version#*.*.}"
-            linux_version="${version%."${suffix}"}"
-        fi
-        cache "${url}" "${file}"
-        undeb "${KSYSROOT_SYSROOT}" "${CACHE_DIR}/${file}" \
-            --exclude ./etc --exclude "./*bin" --exclude "./*/*bin" --exclude ./var \
-            -s '%\./lib\(.*\)%./usr/lib\1%'
-    done
+    undeb "${CACHE_DIR}/${file}" -C "${KSYSROOT_SYSROOT}" --extract \
+        --exclude ./etc --exclude "./*bin" --exclude "./*/*bin" --exclude ./var \
+        -s '%\./lib\(.*\)%./usr/lib\1%'
+}
 
-    fixup
+ksysroot_debian_bomclose() {
+    debian_fixup
 }
 
 # $1 - flavoured base triple
@@ -179,17 +189,14 @@ ksysroot_debian_install() {
     ksysroot_prefix "${2:-ksysroot-$1}"
 
     local db_tmp
-    local cache_dir_abs
-    cache_dir_abs="$(readlink -f "${CACHE_DIR}")"
 
     ksysroot_debian_meta "$1"
 
-    mkdir -p "${cache_dir_abs}"/debian
+    mkdir -p "${CACHE_DIR}"/debian
 
     db_tmp="$(call_debootstrap --unprivileged --merged-usr --foreign)"
 
-    local linux_version
-    linux_version="$(debian_emit_bom "${db_tmp}" | sed -nE 's/^linux-libc-dev[[:space:]]+([0-9]+)\.([0-9]+).*$/\1.\2/p')"
+    LINUX_VERSION="$(debian_emit_bom "${db_tmp}" | sed -nE 's/^linux-libc-dev[[:space:]]+([0-9]+)\.([0-9]+).*$/\1.\2/p')"
 
     rm -rf "${db_tmp:?}"/usr/*bin
     mkdir -p "${KSYSROOT_SYSROOT}"

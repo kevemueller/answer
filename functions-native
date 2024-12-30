@@ -1,7 +1,6 @@
 # shellcheck shell=sh
 
 ksysroot_native_meta() {
-    KSYSROOT_FLAVOUR=
     MESON_CPUFAMILY=
     MESON_CPU=
     MESON_ENDIAN=

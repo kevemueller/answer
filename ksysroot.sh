@@ -12,32 +12,21 @@ case "$(uname -s)" in
         ;;
 esac
 
-BREW_PREFIX_LLVM=${BREW_PREFIX_LLVM:-$(brew --prefix llvm)}
-BREW_PREFIX_LLD=${BREW_PREFIX_LLD:-$(brew --prefix lld)}
-BREW_PREFIX_PKGCONF=${BREW_PREFIX_PKGCONF:-$(brew --prefix pkgconf)}
+: "${KSYSROOT_PREFIX:=$(dirname "$0")}"
 
-DEBIAN_MIRROR=${DEBIAN_MIRROR:-http://ftp.nl.debian.org/debian/pool/main}
-FREEBSD_MIRROR=${FREEBSD_MIRROR:-https://download.freebsd.org}
+: "${BREW_PREFIX_LLVM:=$(brew --prefix llvm)}"
+: "${BREW_PREFIX_LLD:=$(brew --prefix lld)}"
+: "${BREW_PREFIX_PKGCONF:=$(brew --prefix pkgconf)}"
 
+: "${DEBIAN_MIRROR:=http://ftp.nl.debian.org/debian/pool/main}"
+: "${FREEBSD_MIRROR:=https://download.freebsd.org}"
 
-CACHE_DIR=cache
+: "${CACHE_DIR:=cache}"
 
-. functions
-
-ksysroot_native() {
-    local target_dir="$1"
-    local target_dir_abs
-    target_dir_abs="$(${READLINK} -f "${target_dir}")"
-
-    mk_wrappers native "${target_dir_abs}" "N/A" "${NATIVE_LINKER}"
-    emit_meta_env native "${target_dir_abs}" > "${target_dir}"/bin/native-env
-    chmod +x "${target_dir}"/bin/native-env
-    emit_meta_llvm native "${target_dir_abs}" "${NATIVE_LINKER}" > "${target_dir}"/native.txt
-}
-
-. functions-native
-. functions-debian
-. functions-freebsd
+. "${KSYSROOT_PREFIX}"/functions
+. "${KSYSROOT_PREFIX}"/functions-native
+. "${KSYSROOT_PREFIX}"/functions-debian
+. "${KSYSROOT_PREFIX}"/functions-freebsd
 
 ksysroot_test() {
     local ksysroot_dir="$1"
@@ -95,7 +84,7 @@ test_all() {
 usage() {
         echo Usage:
         echo     "$0" bom triple
-        echo     "$0" frombom triple target-directory \< bomfile
+        echo     "$0" frombom target-directory [bomfile]
         echo     "$0" install triple target-directory
         echo     "$0" test directory
 }
@@ -106,6 +95,9 @@ dispatch() {
     case "${cmd}" in
         test)
             ksysroot_test "$1"
+            ;;
+        frombom)
+            ksysroot_frombom "$@"
             ;;
         *)
             case "$1" in
