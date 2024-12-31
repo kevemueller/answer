@@ -1,10 +1,31 @@
 # shellcheck shell=sh
 set -e
 
-: "${CURL:=curl}"
-: "${FIND:=find}"
-
 ### tools
+
+require_tool() {
+    local tool
+    
+    if ! tool="$(type "$1" 2>/dev/null)"; then
+        1>&2 echo This script requires the "$1" executable. If you have that outside of PATH
+        1>&2 echo you can point at it using the environment variable "$(echo "$1" | tr '[:lower:]' '[:upper:]')".
+        echo /usr/bin/false
+        return 1
+    fi
+    case "${tool}" in
+        *builtin|*"is a function"*|*"is aliased to"*|*"is a shell keyword")
+            echo "$1"
+            ;;
+        *)
+            echo "${tool#"$1 is "}"
+            ;;
+    esac
+    return 0
+}
+
+: "${CURL:=$(require_tool curl)}"
+: "${FIND:=$(require_tool find)}"
+: "${XARGS:=$(require_tool xargs)}"
 
 quote_snippet() {
     for i in "$@"; do
@@ -297,7 +318,8 @@ ksysroot_frombom() {
     while read -r pkg version url file; do
         1>&2 echo PKG="${pkg}" VERSION="${version}" URL="${url}" FILE="${file}"
         if [ "${pkg}" = "#" ]; then
-            export $(echo ${version} ${url} ${file} | xargs)
+            # shellcheck disable=SC2046
+            export $(echo "${version}" "${url}" "${file}" | ${XARGS})
         else
             ksysroot_"${KSYSROOT_OSFLAVOUR}"_bomresource "${pkg}" "${version}" "${url}" "${file}"
         fi

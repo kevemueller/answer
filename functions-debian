@@ -1,17 +1,16 @@
 # shellcheck shell=sh
 set -e
 
-: "${DEBOOTSTRAP:="/usr/local/sbin/debootstrap"}"
-: "${MKTEMP:="mktemp"}"
-: "${TAR:="tar"}"
-
+: "${BSDTAR:=$(require_tool bsdtar)}"
+: "${LAM:=$(require_tool lam)}"
+: "${MKTEMP:=$(require_tool mktemp)}"
 
 # unpack the Debian archive passed in $1
 # pass remaining args to actual extractor
 undeb() {
     local debfile="$1"
     shift
-	${TAR} -Oxzf "${debfile}" data.tar.xz  | ${TAR} -z "$@"
+	${BSDTAR} -Oxzf "${debfile}" data.tar.xz  | ${BSDTAR} -z "$@"
 }
 
 # set variables describing the sysroot
@@ -110,7 +109,7 @@ EOF
 
 debian_emit_bom() {
     local db_tmp="$1"
-    lam "${db_tmp}"/debootstrap/deburis -s" " "${db_tmp}"/debootstrap/debpaths |
+    ${LAM} "${db_tmp}"/debootstrap/deburis -s" " "${db_tmp}"/debootstrap/debpaths |
         while read -r pkg version url pkgd file; do
             test "${pkg}" = "${pkgd}" || echo mismatch at "${pkg}"
             # 1>&2 echo PKG="${pkg}" URL="${url}" FILE="$(basename "${file}")"
@@ -138,6 +137,8 @@ debian_fixup() {
 # caches the downloaded DEBs in ${CACHE_DIR}/debian
 # slow, as it needs to obtain archive index and download all DEBs
 ksysroot_debian_bom() {
+    : "${DEBOOTSTRAP:=$(require_tool debootstrap)}"
+
     local db_tmp
 
     ksysroot_debian_meta "$1"
@@ -186,6 +187,8 @@ ksysroot_debian_bomclose() {
 # $2 - target directory
 #   e.g. aarch64-linux-gnu@debian12
 ksysroot_debian_install() {
+    : "${DEBOOTSTRAP:=$(require_tool debootstrap)}"
+
     ksysroot_prefix "${2:-ksysroot-$1}"
 
     local db_tmp

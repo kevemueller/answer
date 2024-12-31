@@ -1,7 +1,7 @@
 # shellcheck shell=sh
 set -e
 
-: "${XARGS:="xargs"}"
+: "${XARGS:=$(require_tool xargs)}"
 
 # $1 - flavoured base triple
 ksysroot_freebsd_meta() {
