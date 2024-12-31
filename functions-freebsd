@@ -2,6 +2,78 @@
 set -e
 
 : "${XARGS:=$(require_tool xargs)}"
+: "${TAR:=$(require_tool tar)}"
+
+
+# Flavour examples
+#   aarch64-freebsd14.2@freebsd14.2-RELEASE
+#   x86_64-freebsd14.2@freebsd14.2-RELEASE
+
+FREEBSD_TIER1="aarch64 x86_64"
+FREEBSD_TIER2="i686 powerpc powerpcspe powerpc64 powerpc64le riscv64" # armv7 has no base.txz
+FREEBSD_TIER3="" # armv6 has no base.txz
+
+FREEBSD_PRODUCTION1="14.2-RELEASE"
+FREEBSD_PRODUCTION2="14.1-RELEASE 13.4-RELEASE 13.3-RELEASE"
+FREEBSD_SNAP="15.0-CURRENT 14.2-STABLE 13.4-STABLE"
+
+freebsd_flavour() {
+    local vnum="${2%-*}"
+    printf "%s-freebsd%s@freebsd%s\n" "$1" "${vnum}" "$2"
+}
+
+# FreeBSD Tier 1 platforms on most recent supported Release
+ksysroot_freebsd_iterate1() {
+    local arch_type version
+
+    for arch_type in ${FREEBSD_TIER1} ; do
+        for version in ${FREEBSD_PRODUCTION1}; do
+            freebsd_flavour "${arch_type}" "${version}"
+        done
+    done
+}
+
+# FreeBSD Tier 1 platforms on legacy supported Releases + snapshots
+# FreeBSD Tier 2 platforms on most recent supported Releases
+ksysroot_freebsd_iterate2() {
+    local arch_type version
+
+    for arch_type in ${FREEBSD_TIER1}; do
+        for version in ${FREEBSD_PRODUCTION2} ${FREEBSD_SNAP}; do
+            freebsd_flavour "${arch_type}" "${version}"
+        done
+    done
+    for arch_type in ${FREEBSD_TIER2}; do
+        for version in ${FREEBSD_PRODUCTION1}; do
+            freebsd_flavour "${arch_type}" "${version}"
+        done
+    done
+}
+
+
+# FreeBSD Tier 2 platforms on legacy supported Releases + snapshots
+# FreeBSD Tier 3 platforms on most recent supported Releases
+ksysroot_freebsd_iterate3() {
+    local arch_type version
+
+    for arch_type in ${FREEBSD_TIER2}; do
+        for version in ${FREEBSD_PRODUCTION2} ${FREEBSD_SNAP}; do
+            freebsd_flavour "${arch_type}" "${version}"
+        done
+    done
+    for arch_type in ${FREEBSD_TIER3}; do
+        for version in ${FREEBSD_PRODUCTION1}; do
+            freebsd_flavour "${arch_type}" "${version}"
+        done
+    done
+}
+
+ksysroot_freebsd_iterate() {
+    ksysroot_freebsd_iterate1
+    ksysroot_freebsd_iterate2
+    ksysroot_freebsd_iterate3
+}
+
 
 # $1 - flavoured base triple
 ksysroot_freebsd_meta() {
@@ -65,7 +137,7 @@ ksysroot_freebsd_meta() {
             MESON_CPUFAMILY="x86_64"
             ;;
         *)
-            echo Unknown FREEBSD_MACHINE "${triple}"
+            echo Unknown FREEBSD_MACHINE "${basetriple}"
             return 1
             ;;
     esac
@@ -108,7 +180,7 @@ ksysroot_freebsd_bom() {
 
 
 ksysroot_freebsd_bomresource() {
-    local pkg="$1"
+    local _pkg="$1"
     local version="$2"
     local url="$3"
     local file="$4"
