@@ -1,0 +1,151 @@
+##
+# Copyright (c) 2024 Keve Müller <kevemueller@users.github.com>
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
+# GitHub action to compile on ubuntu-24.04 (amd64) and macos-15 (aarch64)
+#  * set-up prerequisites
+
+name: build
+
+"on":
+  pull_request:
+    branches:
+      - main
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build ${{ matrix.build-os-pkg }} ${{ matrix.cross }} ${{ matrix.compiler }}
+    runs-on: "${{ matrix.build-os }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        build-os-pkg:
+          - ubuntu-24.04_brew
+          - ubuntu-24.04_apt
+          - macos-15
+          - macos-13
+        cross:
+          - aarch64-freebsd@freebsd14.2-RELEASE
+          - x86_64-freebsd@freebsd14.2-RELEASE
+        include:
+          - build-os-pkg: macos-15
+            build-os: macos-15
+            pkg: native
+            compiler: clang-18
+            pkgs:
+              # - pkgconf comes preinstalled on the GitHub runner
+              - llvm
+              - lld
+              - meson
+
+          - build-os-pkg: macos-13
+            build-os: macos-13
+            pkg: native
+            compiler: clang-19
+            pkgs:
+              # - pkgconf comes preinstalled on the GitHub runner
+              - llvm
+              - lld
+              - meson
+
+          - build-os-pkg: ubuntu-24.04_brew
+            build-os: ubuntu-24.04
+            pkg: brew
+            compiler: clang-19
+            pkgs:
+              - build-essential
+            brewpkgs:
+              - llvm
+              - lld
+              # - pkgconf comes preinstalled on the GitHub runner
+              - meson
+              - libarchive # bsdtar
+          
+          - build-os-pkg: ubuntu-24.04_apt
+            build-os: ubuntu-24.04
+            pkg: native
+            compiler: clang-18
+            pkgs:
+              - build-essential
+              - llvm
+              - lld
+              - pkgconf
+              - meson
+              - libarchive-tools # bsdtar
+
+    steps:
+      - name: install packages (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update --quiet || true
+          brew install ${{ join(matrix.pkgs, ' ') }}
+
+      - name: Set up Homebrew (Linux)
+        if: runner.os == 'Linux' && matrix.pkg == 'brew'
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: install packages (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update --quiet || true
+          sudo apt-get -yq --no-install-suggests --no-install-recommends install \
+            ${{ join(matrix.pkgs, ' ') }}
+      
+      - name: install packages (Linux/brew)
+        if: runner.os == 'Linux' && matrix.pkg == 'brew'
+        run: |
+          brew install ${{ join(matrix.brewpkgs, ' ') }}
+
+      - uses: actions/checkout@v4
+        with:
+          path: src.ksysroot
+
+      - name: setup environment
+        run: |
+          echo "SRC_KSYSROOT=${GITHUB_WORKSPACE}/src.ksysroot" >> "${GITHUB_ENV}"
+          echo "INST_KSYSROOT=${GITHUB_WORKSPACE}/inst.ksysroot" >> "${GITHUB_ENV}"
+
+      - name: select llvm (Linux/brew)
+        if: runner.os == 'Linux' # && matrix.pkg == 'brew'
+        run: |
+          # echo "LLVM_DIR=$(brew --prefix llvm@18)/bin" >> "${GITHUB_ENV}"
+          echo "MESON_COMPILE_ARGS=-v" >> "${GITHUB_ENV}"
+          
+      - name: install ksysroot
+        run: |
+          echo uname -a: $(uname -a)
+          echo uname -m: $(uname -m)
+          echo uname -p: $(uname -p)
+          echo SRC_KSYSROOT="${SRC_KSYSROOT}"
+          echo INST_KSYSROOT="${INST_KSYSROOT}"
+          ${SRC_KSYSROOT}/ksysroot.sh install "${{ matrix.cross }}" "${INST_KSYSROOT}"
+
+      - name: check ksysroot
+        run: |
+          set +e
+          ${SRC_KSYSROOT}/ksysroot.sh test "${INST_KSYSROOT}"
+          check_exit=$?
+          exit $check_exit
+
+      # - name: tar build & test reports
+      #   run: |
+      #     NAME="pkg-${{ matrix.build-os }}-${{ matrix.compiler }}"
+      #     test -d ${INST_PKG} && tar cvf ${NAME}.tar -C ${INST_PKG} .
+      #     tar cvf ${NAME}-report${{ join(matrix.sanitize, '_') }}.tar -C "${BUILD_PKG}/html" .
+      #   if: ${{ always() }}
+
+      # - name: archive build artefacts
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: pkg-test${{ join(matrix.sanitize, '_') }}-${{ matrix.build-os }}-${{ matrix.compiler }}
+      #     path: pkg*.tar
+      #     compression-level: 0
+      #     retention-days: 10
+      #     overwrite: true
+      #   if: ${{ always() }}
