@@ -74,6 +74,23 @@ ksysroot_freebsd_iterate() {
     ksysroot_freebsd_iterate3
 }
 
+freebsd_quirks() {
+    case "$(uname -s)" in
+        Linux)
+            case "$(${LLVM_DIR}/clang++ --version)" in
+                "Homebrew clang"*)
+                    # Homebrew Clang on Ubuntu fails to detect libc++
+                    # Ubuntu Clang & Homebrew Clang on MacOS are fine 
+                    KSYSROOT_CPP_QUIRK_ARGS="-stdlib=libc++"
+                    ;;
+                *)
+                    ;;
+            esac
+            ;;
+        *)
+            ;;
+    esac
+}
 
 # $1 - flavoured base triple
 ksysroot_freebsd_meta() {
@@ -193,11 +210,12 @@ ksysroot_freebsd_bomclose() {
     # Brew removes empty directories, keep them
     ${FIND} "${KSYSROOT_SYSROOT}" -type d -empty | ${XARGS} -I'{}' touch '{}'/.empty
     fix_abs_link "${KSYSROOT_SYSROOT}"
+    freebsd_quirks
     ksysroot_emit /usr/lib /usr/local/libdata/pkgconfig /usr/libdata/pkgconfig
 }
 
 ksysroot_freebsd_install() {
-    ksysroot_freebsd_bom "$1" | ksysroot_frombom "$2"
+    ksysroot_freebsd_bom "$1" | ksysroot_frombom "${2:-ksysroot-$1}"
 }
 
 ksysroot_freebsd_pkgbase() {

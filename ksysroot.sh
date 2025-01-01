@@ -35,22 +35,28 @@ fi
 
 ksysroot_test() {
     : "${MESON:=$(require_tool meson)}"
+    : "${MESON_SETUP_ARGS:=}"
+    : "${MESON_COMPILE_ARGS:=}"
 
     local ksysroot_dir="$1"
     local base
     base="$(basename "$1")"
 
-    local MESON_SETUP="--native-file=${ksysroot_dir}/native.txt"
+    local MESON_SETUP_ARGS="--native-file=${ksysroot_dir}/native.txt ${MESON_SETUP_ARGS}"
     if [ -e "${ksysroot_dir}/cross.txt" ]; then
-        MESON_SETUP="${MESON_SETUP} --cross-file=${ksysroot_dir}/cross.txt"
+        MESON_SETUP_ARGS="--cross-file=${ksysroot_dir}/cross.txt ${MESON_SETUP_ARGS}"
     fi
 
     local build_dir
     for i in c cxx; do
         build_dir="build-base-$i"
         rm -rf "${build_dir}"
+
+        echo MESON_SETUP_ARGS="${MESON_SETUP_ARGS}"
+        echo MESON_COMPILE_ARGS="${MESON_COMPILE_ARGS}"
+
         # shellcheck disable=SC2086
-        ${MESON} setup ${MESON_SETUP} "${build_dir}" "${KSYSROOT_PREFIX}/test-$i" && ${MESON} compile -C "${build_dir}"
+        ${MESON} setup ${MESON_SETUP_ARGS} "${build_dir}" "${KSYSROOT_PREFIX}/test-$i" && ${MESON} compile ${MESON_COMPILE_ARGS} -C "${build_dir}"
     done
 }
 
