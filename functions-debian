@@ -2,7 +2,6 @@
 set -e
 
 : "${BSDTAR:=$(require_tool bsdtar)}"
-: "${LAM:=$(require_tool lam)}"
 : "${MKTEMP:=$(require_tool mktemp)}"
 
 # unpack the Debian archive passed in $1
@@ -108,6 +107,8 @@ EOF
 }
 
 debian_emit_bom() {
+    : "${LAM:=$(require_tool lam)}"
+
     local db_tmp="$1"
     ${LAM} "${db_tmp}"/debootstrap/deburis -s" " "${db_tmp}"/debootstrap/debpaths |
         while read -r pkg version url pkgd file; do

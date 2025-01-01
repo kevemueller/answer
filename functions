@@ -6,25 +6,19 @@ set -e
 require_tool() {
     local tool
     
-    if ! tool="$(type "$1" 2>/dev/null)"; then
+    if ! tool="$(command -v "$1" 2>/dev/null)"; then
         1>&2 echo This script requires the "$1" executable. If you have that outside of PATH
         1>&2 echo you can point at it using the environment variable "$(echo "$1" | tr '[:lower:]' '[:upper:]')".
         echo /usr/bin/false
         return 1
     fi
-    case "${tool}" in
-        *builtin|*"is a function"*|*"is aliased to"*|*"is a shell keyword")
-            echo "$1"
-            ;;
-        *)
-            echo "${tool#"$1 is "}"
-            ;;
-    esac
+    echo "${tool}"
     return 0
 }
 
 : "${CURL:=$(require_tool curl)}"
 : "${FIND:=$(require_tool find)}"
+: "${READLINK:=$(require_tool readlink)}"
 : "${XARGS:=$(require_tool xargs)}"
 
 quote_snippet() {
@@ -69,6 +63,7 @@ cache() {
     local base="${2:-$(basename "${url}")}"
     local cache_file="${CACHE_DIR}/${base}"
     >&2 echo Caching "${url}" to "${cache_file}"
+    mkdir -p "$(dirname "${cache_file}")"
     echo "${url}" > "${cache_file}".url
     test -f "${cache_file}" || ${CURL} --fail -o "${cache_file}" "${url}"
     echo "${cache_file}"
@@ -100,32 +95,34 @@ if [ \$# -ne 0 ]; then
 	set -a
 fi
 
-LLVM_DIR=${BREW_PREFIX_LLVM}
-LLD_DIR=${BREW_PREFIX_LLD}
+KSYSROOT_TRIPLE="${KSYSROOT_TRIPLE}"
+KSYSROOT_FULL_TRIPLE="${KSYSROOT_FULL_TRIPLE}"
 
-LLVM_CONFIG=\${LLVM_DIR}/bin/llvm-config
-PKG_CONFIG=${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-pkg-config
-PKG_CONFIG_FOR_BUILD=${BREW_PREFIX_PKGCONF}/bin/pkg-config
+LLVM_DIR="${LLVM_DIR}"
 
-CC=${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cc
-CC_FOR_BUILD=\${LLVM_DIR}/bin/clang
-CXX=${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-c++
-CXX_FOR_BUILD=\${LLVM_DIR}/bin/clang++
-CPP=${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cpp
-CPP_FOR_BUILD=\${LLVM_DIR}/bin/clang-cpp
-LD=${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-ld
-LD_FOR_BUILD=\${LLD_DIR}/bin/${NATIVE_LINKER}
+LLVM_CONFIG=\${LLVM_DIR}/llvm-config
+PKG_CONFIG=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-pkg-config
+PKG_CONFIG_FOR_BUILD=${PKG_CONFIG}/bin/pkg-config
 
-AR=\${LLVM_DIR}/bin/llvm-ar
-AS=\${LLVM_DIR}/bin/llvm-as
-NM=\${LLVM_DIR}/bin/llvm-nm
-OBJCOPY=\${LLVM_DIR}/bin/llvm-objcopy
-OBJDUMP=\${LLVM_DIR}/bin/llvm-objdump
-RANLIB=\${LLVM_DIR}/bin/llvm-ranlib
-READELF=\${LLVM_DIR}/bin/llvm-readelf
-SIZE=\${LLVM_DIR}/bin/llvm-size
-STRINGS=\${LLVM_DIR}/bin/llvm-strings
-STRIP=\${LLVM_DIR}/bin/llvm-strip
+CC=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-cc
+CC_FOR_BUILD=\${LLVM_DIR}/clang
+CXX=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-c++
+CXX_FOR_BUILD=\${LLVM_DIR}/clang++
+CPP=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-cpp
+CPP_FOR_BUILD=\${LLVM_DIR}/clang-cpp
+LD=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-ld
+LD_FOR_BUILD=${LLD_DIR}/${NATIVE_LINKER}
+
+AR=\${LLVM_DIR}/llvm-ar
+AS=\${LLVM_DIR}/llvm-as
+NM=\${LLVM_DIR}/llvm-nm
+OBJCOPY=\${LLVM_DIR}/llvm-objcopy
+OBJDUMP=\${LLVM_DIR}/llvm-objdump
+RANLIB=\${LLVM_DIR}/llvm-ranlib
+READELF=\${LLVM_DIR}/llvm-readelf
+SIZE=\${LLVM_DIR}/llvm-size
+STRINGS=\${LLVM_DIR}/llvm-strings
+STRIP=\${LLVM_DIR}/llvm-strip
 
 if [ \$# -ne 0 ]; then
 	exec "\$@"
@@ -156,7 +153,7 @@ EOF
 # useful Meson constants:
 #   sysroot -- our sysroot
 #   triple  -- our triple
-#   BREW_PREFIX_LLVM_${name} - directory to llvm
+#   llvm_dir_${name} - directory to llvm
 # With Meson we don't need to use the wrappers! 
 emit_meta_llvm() {
     local name="$1"
@@ -165,7 +162,7 @@ emit_meta_llvm() {
     local pkg_config=
 
     if [ "${name}" = "native" ]; then
-        pkg_config="'${BREW_PREFIX_PKGCONF}/bin/pkg-config'"
+        pkg_config="'${PKG_CONFIG}/bin/pkg-config'"
         ld="${NATIVE_LINKER}"
     else
         pkg_config="ksysroot_dir_${name} / 'bin' / triple + '-pkg-config'"
@@ -174,29 +171,28 @@ emit_meta_llvm() {
 
     cat <<EOF
 [binaries]
-llvm-config = llvm_dir_${name} / 'bin/llvm-config'
+llvm-config = llvm_dir_${name} / 'llvm-config'
 pkg-config = ${pkg_config}
 
-c = llvm_dir_${name} / 'bin/clang'
-c_ld = lld_dir_${name} / 'bin/${ld}'
-cpp = llvm_dir_${name} / 'bin/clang++'
-cpp_ld = lld_dir_${name} / 'bin/${ld}'
+c = llvm_dir_${name} / 'clang'
+c_ld = '${LLD_DIR}' / '${ld}'
+cpp = llvm_dir_${name} / 'clang++'
+cpp_ld = '${LLD_DIR}' / '${ld}'
 
-ar = llvm_dir_${name} / 'bin/llvm-ar'
-as = llvm_dir_${name} / 'bin/llvm-as'
-ld = lld_dir_${name} / 'bin/${ld}'
-nm = llvm_dir_${name} / 'bin/llvm-nm'
-objcopy = llvm_dir_${name} / 'bin/llvm-objcopy'
-objdump = llvm_dir_${name} / 'bin/llvm-objdump'
-ranlib = llvm_dir_${name} / 'bin/llvm-ranlib'
-readelf = llvm_dir_${name} / 'bin/llvm-readelf'
-size = llvm_dir_${name} / 'bin/llvm-size'
-strings = llvm_dir_${name} / 'bin/llvm-strings'
-strip = llvm_dir_${name} / 'bin/llvm-strip'
+ar = llvm_dir_${name} / 'llvm-ar'
+as = llvm_dir_${name} / 'llvm-as'
+ld = '${LLD_DIR}' / '${ld}'
+nm = llvm_dir_${name} / 'llvm-nm'
+objcopy = llvm_dir_${name} / 'llvm-objcopy'
+objdump = llvm_dir_${name} / 'llvm-objdump'
+ranlib = llvm_dir_${name} / 'llvm-ranlib'
+readelf = llvm_dir_${name} / 'llvm-readelf'
+size = llvm_dir_${name} / 'llvm-size'
+strings = llvm_dir_${name} / 'llvm-strings'
+strip = llvm_dir_${name} / 'llvm-strip'
 
 [constants]
-llvm_dir_${name} = '${BREW_PREFIX_LLVM}'
-lld_dir_${name} = '${BREW_PREFIX_LLD}'
+llvm_dir_${name} = '${LLVM_DIR}'
 ksysroot_dir_${name} = '${KSYSROOT_PREFIX_ABS}'
 EOF
 }
@@ -263,18 +259,19 @@ mk_wrappers() {
     local llvm_tools="ar as nm objcopy objdump ranlib readelf size strings strip"
 
     # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-pkg-config" "${BREW_PREFIX_PKGCONF}"/bin/pkg-config ${pkgconf_args}
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-pkg-config" "${PKG_CONFIG}"/bin/pkg-config ${pkgconf_args}
     # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cc" "${BREW_PREFIX_LLVM}"/bin/clang ${common_args} -fuse-ld="${BREW_PREFIX_LLD}"/bin/"${KSYSROOT_LINKER}"
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cc" "${LLVM_DIR}"/clang ${common_args} -fuse-ld="${LLD_DIR}/${KSYSROOT_LINKER}"
     # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-c++" "${BREW_PREFIX_LLVM}"/bin/clang++ ${common_args} -fuse-ld="${BREW_PREFIX_LLD}"/bin/"${KSYSROOT_LINKER}"
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-c++" "${LLVM_DIR}"/clang++ ${common_args} -fuse-ld="${LLD_DIR}/${KSYSROOT_LINKER}"
     # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cpp" "${BREW_PREFIX_LLVM}"/bin/clang-cpp ${common_args}
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cpp" "${LLVM_DIR}"/clang-cpp ${common_args}
     # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-ld" "${BREW_PREFIX_LLD}"/bin/"${KSYSROOT_LINKER}" ${sysroot_args}
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-ld" "${LLD_DIR}/${KSYSROOT_LINKER}" ${sysroot_args}
 
     for i in ${llvm_tools}; do
-        mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-$i" "${BREW_PREFIX_LLVM}"/bin/llvm-"$i" ${common_args}
+        # shellcheck disable=SC2086
+        mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-$i" "${LLVM_DIR}"/llvm-"$i" ${common_args}
     done
 
     if [ "${KSYSROOT_TRIPLE}" != "${KSYSROOT_FULL_TRIPLE}" ]; then

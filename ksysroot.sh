@@ -1,8 +1,6 @@
 #!/bin/sh
 set -e
 
-READLINK="readlink"
-
 case "$(uname -s)" in
     Darwin)
         NATIVE_LINKER=ld64.lld
@@ -14,22 +12,33 @@ esac
 
 : "${KSYSROOT_PREFIX:=$(dirname "$0")}"
 
-: "${BREW_PREFIX_LLVM:=$(brew --prefix llvm)}"
-: "${BREW_PREFIX_LLD:=$(brew --prefix lld)}"
-: "${BREW_PREFIX_PKGCONF:=$(brew --prefix pkgconf)}"
+. "${KSYSROOT_PREFIX}"/functions
+
+if command -v brew >/dev/null; then
+: "${LLVM_DIR:=$(brew --prefix llvm)/bin}"
+: "${LLD_DIR:=$(brew --prefix lld)/bin}"
+: "${PKG_CONFIG:=$(brew --prefix pkgconf)/bin/pkg-config}"
+else
+: "${LLVM_DIR:=$(dirname "$(require_tool clang)")}"
+: "${LLD_DIR:=$(dirname "$(require_tool lld)")}"
+: "${PKG_CONFIG:=$(require_tool pkg-config)}"
+fi
 
 : "${DEBIAN_MIRROR:=http://ftp.nl.debian.org/debian/pool/main}"
 : "${FREEBSD_MIRROR:=https://download.freebsd.org}"
 
 : "${CACHE_DIR:=cache}"
 
-. "${KSYSROOT_PREFIX}"/functions
 . "${KSYSROOT_PREFIX}"/functions-native
 . "${KSYSROOT_PREFIX}"/functions-debian
 . "${KSYSROOT_PREFIX}"/functions-freebsd
 
 ksysroot_test() {
+    : "${MESON:=$(require_tool meson)}"
+
     local ksysroot_dir="$1"
+    local base
+    base="$(basename "$1")"
 
     local MESON_SETUP="--native-file=${ksysroot_dir}/native.txt"
     if [ -e "${ksysroot_dir}/cross.txt" ]; then
@@ -38,10 +47,10 @@ ksysroot_test() {
 
     local build_dir
     for i in c cxx; do
-        build_dir="build-$1-${i}"
+        build_dir="build-base-$i"
         rm -rf "${build_dir}"
         # shellcheck disable=SC2086
-        meson setup ${MESON_SETUP} "${build_dir}" test-"${i}" && meson compile -C "${build_dir}"
+        ${MESON} setup ${MESON_SETUP} "${build_dir}" "${KSYSROOT_PREFIX}/test-$i" && ${MESON} compile -C "${build_dir}"
     done
 }
 
