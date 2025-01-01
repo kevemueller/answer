@@ -258,19 +258,27 @@ mk_wrappers() {
         common_args="-target ${KSYSROOT_FULL_TRIPLE} ${sysroot_args}"
         pkgconf_args="--personality=${KSYSROOT_PREFIX_ABS}/pkg-config.personality"
     fi
+
+    local clang_tools="cc c++ cpp"
+    local llvm_tools="ar as nm objcopy objdump ranlib readelf size strings strip"
+
     # shellcheck disable=SC2086
     mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-pkg-config" "${BREW_PREFIX_PKGCONF}"/bin/pkg-config ${pkgconf_args}
     # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cc" "${BREW_PREFIX_LLVM}"/bin/clang ${common_args} -fuse-ld="${BREW_PREFIX_LLD}"/"${KSYSROOT_LINKER}"
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cc" "${BREW_PREFIX_LLVM}"/bin/clang ${common_args} -fuse-ld="${BREW_PREFIX_LLD}"/bin/"${KSYSROOT_LINKER}"
     # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-c++" "${BREW_PREFIX_LLVM}"/bin/clang++ ${common_args} -fuse-ld="${BREW_PREFIX_LLD}"/"${KSYSROOT_LINKER}"
+    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-c++" "${BREW_PREFIX_LLVM}"/bin/clang++ ${common_args} -fuse-ld="${BREW_PREFIX_LLD}"/bin/"${KSYSROOT_LINKER}"
     # shellcheck disable=SC2086
     mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cpp" "${BREW_PREFIX_LLVM}"/bin/clang-cpp ${common_args}
     # shellcheck disable=SC2086
     mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-ld" "${BREW_PREFIX_LLD}"/bin/"${KSYSROOT_LINKER}" ${sysroot_args}
 
+    for i in ${llvm_tools}; do
+        mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-$i" "${BREW_PREFIX_LLVM}"/bin/llvm-"$i" ${common_args}
+    done
+
     if [ "${KSYSROOT_TRIPLE}" != "${KSYSROOT_FULL_TRIPLE}" ]; then
-        for i in pkg-config cc c++ cpp ld; do
+        for i in pkg-config ${clang_tools} ld ${llvm_tools}; do
             mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_TRIPLE}-$i" "${KSYSROOT_FULL_TRIPLE}-$i"
         done
     fi

@@ -87,6 +87,10 @@ usage() {
         echo     "$0" frombom target-directory [bomfile]
         echo     "$0" install triple target-directory
         echo     "$0" test directory
+        echo     "$0" iterate
+        echo     "$0" iterate1
+        echo     "$0" iterate2
+        echo     "$0" iterate3
 }
 
 dispatch() {
@@ -98,6 +102,9 @@ dispatch() {
             ;;
         frombom)
             ksysroot_frombom "$@"
+            ;;
+        iterate*)
+            ksysroot_freebsd_"${cmd}"
             ;;
         *)
             case "$1" in
