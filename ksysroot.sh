@@ -33,7 +33,7 @@ fi
 . "${KSYSROOT_PREFIX}"/functions-debian
 . "${KSYSROOT_PREFIX}"/functions-freebsd
 
-ksysroot_test() {
+ksysroot_test_meson() {
     : "${MESON:=$(require_tool meson)}"
     : "${MESON_SETUP_ARGS:=}"
     : "${MESON_COMPILE_ARGS:=}"
@@ -49,7 +49,7 @@ ksysroot_test() {
 
     local build_dir
     for i in c cxx; do
-        build_dir="build-base-$i"
+        build_dir="build-${base}-$i"
         rm -rf "${build_dir}"
 
         echo MESON_SETUP_ARGS="${MESON_SETUP_ARGS}"
@@ -60,6 +60,18 @@ ksysroot_test() {
         test -x "${build_dir}"/main
         file "${build_dir}"/main
     done
+}
+
+ksysroot_test_pkgconf() {
+    local ksysroot_dir="$1"
+    local PKG_CONFIG
+    PKG_CONFIG=$("${ksysroot_dir}"/bin/*-env sh -c 'echo "${PKG_CONFIG}"')
+    "${PKG_CONFIG}" --list-all
+}
+
+ksysroot_test() {
+    ksysroot_test_pkgconf "$@"
+    ksysroot_test_meson "$@"
 }
 
 test_all() {
@@ -90,20 +102,14 @@ test_all() {
     done
 }
 
-#     testall)
-#         test_all
-#         ;;
-#     install)
-#         install_sysroot "${2:-$(${MKTEMP} -dt ksysroot-)}" "${3:-native}"
-#         ;;
-#     *)
-
 usage() {
         echo Usage:
         echo     "$0" bom triple
         echo     "$0" frombom target-directory [bomfile]
         echo     "$0" install triple target-directory
         echo     "$0" test directory
+        echo     "$0" test_meson directory
+        echo     "$0" test_pkgconf directory
         echo     "$0" iterate
         echo     "$0" iterate1
         echo     "$0" iterate2
@@ -114,8 +120,8 @@ dispatch() {
     local cmd="$1"
     shift
     case "${cmd}" in
-        test)
-            ksysroot_test "$1"
+        test|test_meson|test_pkgconf)
+            ksysroot_"${cmd}" "$1"
             ;;
         frombom)
             ksysroot_frombom "$@"
@@ -138,7 +144,7 @@ dispatch() {
                     usage
                     return 1                
             esac
-            echo Performed "${cmd}" "$@" for "${KSYSROOT_TRIPLE}" in "${KSYSROOT_PREFIX}"
+            1>&2 echo Performed "${cmd}" "$@" for "${KSYSROOT_TRIPLE}" in "${KSYSROOT_PREFIX}"
             ;;
     esac
 }

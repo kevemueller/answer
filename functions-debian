@@ -198,7 +198,7 @@ ksysroot_debian_install() {
 
     mkdir -p "${CACHE_DIR}"/debian
 
-    if ${DEBOOTSTRAP} --help | grep "unprivileged"; then
+    if ${DEBOOTSTRAP} --help | grep "unprivileged" >/dev/null; then
         db_tmp="$(call_debootstrap --unprivileged --merged-usr --foreign)"
     else
         : "${FAKEROOT:=$(require_tool fakeroot)}"
