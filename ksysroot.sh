@@ -57,6 +57,8 @@ ksysroot_test() {
 
         # shellcheck disable=SC2086
         ${MESON} setup ${MESON_SETUP_ARGS} "${build_dir}" "${KSYSROOT_PREFIX}/test-$i" && ${MESON} compile ${MESON_COMPILE_ARGS} -C "${build_dir}"
+        test -x "${build_dir}"/main
+        file "${build_dir}"/main
     done
 }
 
@@ -136,6 +138,7 @@ dispatch() {
                     usage
                     return 1                
             esac
+            echo Performed "${cmd}" "$@" for "${KSYSROOT_TRIPLE}" in "${KSYSROOT_PREFIX}"
             ;;
     esac
 }

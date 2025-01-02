@@ -77,7 +77,7 @@ ksysroot_freebsd_iterate() {
 freebsd_quirks() {
     case "$(uname -s)" in
         Linux)
-            case "$(${LLVM_DIR}/clang++ --version)" in
+            case "$("${LLVM_DIR}"/clang++ --version)" in
                 "Homebrew clang"*)
                     # Homebrew Clang on Ubuntu fails to detect libc++
                     # Ubuntu Clang & Homebrew Clang on MacOS are fine 
