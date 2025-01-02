@@ -278,7 +278,7 @@ mk_wrappers() {
 
     for i in ${llvm_tools}; do
         # shellcheck disable=SC2086
-        mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-$i" "${LLVM_DIR}"/llvm-"$i" ${common_args}
+        mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-$i" "${LLVM_DIR}"/llvm-"$i"
     done
 
     if [ "${KSYSROOT_TRIPLE}" != "${KSYSROOT_FULL_TRIPLE}" ]; then
