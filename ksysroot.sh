@@ -66,6 +66,7 @@ ksysroot_test_pkgconf() {
     local ksysroot_dir="$1"
     local PKG_CONFIG
     PKG_CONFIG=$("${ksysroot_dir}"/bin/*-env sh -c 'echo "${PKG_CONFIG}"')
+    echo PKG_CONFIG="${PKG_CONFIG}"
     "${PKG_CONFIG}" --list-all
 }
 

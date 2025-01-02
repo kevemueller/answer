@@ -67,7 +67,7 @@ jobs:
             brewpkgs:
               - llvm
               - lld
-              # - pkgconf comes preinstalled on the GitHub runner
+              - pkgconf # we want the brew version
               - meson
               - libarchive # bsdtar
               - kevemueller/ksysroot/debootstrap
