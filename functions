@@ -30,7 +30,7 @@ require_tool() {
 : "${CURL:=$(require_tool curl)}"
 : "${FIND:=$(require_tool find)}"
 : "${READLINK:=$(require_tool readlink)}"
-: "${SHA256:=$(require_tool sha256)}"
+: "${SHA256SUM:=$(require_tool sha256sum)}"
 : "${XARGS:=$(require_tool xargs)}"
 
 quote_snippet() {
@@ -72,6 +72,15 @@ EOF
     fi
 }
 
+# $1 - checksum
+# $2 - file
+shacheck() {
+    echo "$1 $2" | ${SHA256SUM} --check - --status
+}
+# $1 - file
+shacompute() {
+    ${SHA256SUM} "$1" | cut -d" " -f 1
+}
 
 
 cache() {
@@ -83,7 +92,7 @@ cache() {
     >&2 echo Caching "${url}" to "${cache_file}"
     mkdir -p "$(dirname "${cache_file}")"
     echo "${url}" > "${cache_file}".url
-    if [ -e "${cache_file}" ] && [ "${sha256}" ] && ${SHA256} -c "${sha256}" "${cache_file}" >/dev/null; then
+    if [ -e "${cache_file}" ] && [ "${sha256}" ] && shacheck "${sha256}" "${cache_file}"; then
         # 2>&1 echo SHA matched
         echo "${cache_file}"
         return 0
@@ -91,7 +100,7 @@ cache() {
     ${CURL} --disable --cookie /dev/null --show-error --fail \
         --location --remote-time \
         -o "${cache_file}" "${url}"
-    if [ "${sha256}" ] && ! ${SHA256} -c "${sha256}" "${cache_file}"; then
+    if [ "${sha256}" ] && ! shacheck "${sha256}" "${cache_file}"; then
         2>&1 Freshly downloaded "${url}" does not match expected SHA-256 "${sha256}", removing it.
         rm "${cache_file}"
         echo /dev/null

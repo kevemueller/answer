@@ -362,7 +362,7 @@ debian_emit_bom() {
             test "${pkg}" = "${pkgd}" || echo mismatch at "${pkg}"
             # 1>&2 echo PKG="${pkg}" URL="${url}" FILE="$(basename "${file}")"
             debfile="debian/$(basename "${file}")"
-            sha256="$(${SHA256} -q "${CACHE_DIR}/${debfile}")"
+            sha256="$(shacompute "${CACHE_DIR}/${debfile}")"
             printf "%s %s %s %s %s\n" "${pkg}" "${version}" "${url}" "${debfile}" "${sha256}"
         done
 }

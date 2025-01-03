@@ -31,6 +31,7 @@ jobs:
           - ubuntu-24.04_brew
           - ubuntu-24.04_apt
         cross:
+          - native
           - aarch64-freebsd@freebsd14.2-RELEASE
           - x86_64-freebsd@freebsd14.2-RELEASE
           - aarch64-linux-gnu@debian12
