@@ -176,6 +176,10 @@ ksysroot_freebsd_bom() {
     ksysroot_freebsd_meta "$1"
 
     local freebsd_base_url
+    local freebsd_cache_file_prefix
+    local manifest_file
+    local base_sha256
+
     case "${FREEBSD_VERSION}" in
         *-RELEASE|*-RC?|*-BETA?)
             freebsd_base_url=${FREEBSD_MIRROR}/releases
@@ -188,11 +192,17 @@ ksysroot_freebsd_bom() {
             return 1
             ;;
     esac
+    freebsd_base_url="${freebsd_base_url}/${FREEBSD_MACHINE}/${FREEBSD_MACHINE_ARCH}/${FREEBSD_VERSION}"
+    freebsd_cache_file_prefix="freebsd/${FREEBSD_MACHINE}_${FREEBSD_MACHINE_ARCH}_freebsd${FREEBSD_VERSION}-"
+    manifest_file=$(cache "${freebsd_base_url}/MANIFEST" "${freebsd_cache_file_prefix}manifest")
+    base_sha256=$(sed -nE 's/^base.txz[[:space:]]+([0-9a-fA-F]{64}).*/\1/p' "${manifest_file}")
+
     ksysroot_bomconstants
     printf "# FREEBSD_VERSION=%s FREEBSD_MACHINE=%s FREEBSD_MACHINE_ARCH=%s\n" "${FREEBSD_VERSION}" "${FREEBSD_MACHINE}" "${FREEBSD_MACHINE_ARCH}"
-    printf "%s %s %s %s\n" "base.txz" "${FREEBSD_VERSION}" \
-     "${freebsd_base_url}/${FREEBSD_MACHINE}/${FREEBSD_MACHINE_ARCH}/${FREEBSD_VERSION}/base.txz" \
-     "freebsd/${FREEBSD_MACHINE}_${FREEBSD_MACHINE_ARCH}_freebsd${FREEBSD_VERSION}-base.txz"
+    printf "%s %s %s %s %s\n" "base.txz" "${FREEBSD_VERSION}" \
+     "${freebsd_base_url}/base.txz" \
+     "${freebsd_cache_file_prefix}base.txz" \
+     "${base_sha256}"
 }
 
 
@@ -201,9 +211,11 @@ ksysroot_freebsd_bomresource() {
     local version="$2"
     local url="$3"
     local file="$4"
+    local sha256="$5"
 
-    cache "${url}" "${file}"
-    ${TAR} -C "${KSYSROOT_SYSROOT}" -xf "${CACHE_DIR}/${file}" ./lib ./usr/lib ./usr/include ./usr/libdata/pkgconfig
+    local resource_file
+    resource_file="$(cache "${url}" "${file}" "${sha256}")"
+    ${TAR} -C "${KSYSROOT_SYSROOT}" -xf "${resource_file}" ./lib ./usr/lib ./usr/include ./usr/libdata/pkgconfig
 }
 
 ksysroot_freebsd_bomclose() {

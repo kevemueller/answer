@@ -12,6 +12,88 @@ undeb() {
 	${BSDTAR} -Oxzf "${debfile}" data.tar.xz  | ${BSDTAR} -z "$@"
 }
 
+DEBIAN_TIER1="aarch64 x86_64"
+DEBIAN_TIER2="i586 mips64el powerpc64le"
+DEBIAN_TIER3="armel armhf mipsel powerpc s390x"
+
+DEBIAN_PRODUCTION1="12"
+DEBIAN_PRODUCTION2="13"
+
+
+debian_flavour() {
+    local arch="$1"
+    local abi
+    case "${arch}" in
+        armel)
+            arch=arm
+            abi=gnueabi
+            ;;
+        armhf)
+            arch=arm
+            abi=gnueabihf
+            ;;
+        mips64el*)
+            abi=gnuabi64
+            ;;
+        *)  abi=gnu
+            ;;
+    esac
+    printf "%s-linux-%s@debian%s\n" "${arch}" "${abi}" "$2"
+}
+
+# Debian Tier 1 platforms on stable
+ksysroot_debian_iterate1() {
+    local arch_type version
+
+    for arch_type in ${DEBIAN_TIER1} ; do
+        for version in ${DEBIAN_PRODUCTION1}; do
+            debian_flavour "${arch_type}" "${version}"
+        done
+    done
+}
+
+# Debian Tier 1 platforms on testing
+# Debian Tier 2 platforms on stable
+ksysroot_debian_iterate2() {
+    local arch_type version
+
+    for arch_type in ${DEBIAN_TIER1}; do
+        for version in ${DEBIAN_PRODUCTION2}; do
+            debian_flavour "${arch_type}" "${version}"
+        done
+    done
+    for arch_type in ${DEBIAN_TIER2}; do
+        for version in ${DEBIAN_PRODUCTION1}; do
+            debian_flavour "${arch_type}" "${version}"
+        done
+    done
+}
+
+
+# Debian Tier 2 platforms on testing
+# Debian Tier 3 platforms on stable
+ksysroot_debian_iterate3() {
+    local arch_type version
+
+    for arch_type in ${DEBIAN_TIER2}; do
+        for version in ${DEBIAN_PRODUCTION2}; do
+            debian_flavour "${arch_type}" "${version}"
+        done
+    done
+    for arch_type in ${DEBIAN_TIER3}; do
+        for version in ${DEBIAN_PRODUCTION1}; do
+            debian_flavour "${arch_type}" "${version}"
+        done
+    done
+}
+
+ksysroot_debian_iterate() {
+    ksysroot_debian_iterate1
+    ksysroot_debian_iterate2
+    ksysroot_debian_iterate3
+}
+
+
 # set variables describing the sysroot
 # $1 - flavoured base triple
 #   e.g. aarch64-linux-gnu@debian12
@@ -53,21 +135,186 @@ ksysroot_debian_meta() {
     KSYSROOT_OSFLAVOUR="debian"
     KSYSROOT_OSRELEASE="${DEBIAN_VERSION}"
 
-    case "${basetriple}" in 
-        aarch64-linux*-gnu)      
+    # https://wiki.debian.org/Multiarch/Tuples#Why_not_use_GNU_triplets.3F
+    case "${basetriple}" in
+        # RELEASED
+        aarch64-linux*-gnu)
             DEBIAN_ARCH=arm64
             MESON_CPUFAMILY="aarch64"
             ;;
-        i686-linux*-gnu)         
+        arm-linux*-gnueabi)
+            DEBIAN_ARCH=armel
+            MESON_CPUFAMILY="arm"
+            ;;
+        arm-linux*-gnueabihf)
+            DEBIAN_ARCH=armhf
+            MESON_CPUFAMILY="arm"
+            ;;
+        i386-linux*-gnu|i586-linux*-gnu|i686-linux*-gnu)         
             DEBIAN_ARCH=i386
             MESON_CPUFAMILY="x86"
             ;;
-        powerpc64-linux*-gnu)    
-            DEBIAN_ARCH=ppc64
+        mipsel-linux*-gnu*)
+            DEBIAN_ARCH="mipsel"
+            MESON_CPUFAMILY="mips"
+            ;;
+        powerpc64le-linux*-gnu)
+            DEBIAN_ARCH=ppc64el
             MESON_CPUFAMILY="ppc64"
             ;;
-        x86_64-linux*-gnu)       
-            DEBIAN_ARCH=amd64 
+        s390x-linux*-gnu)
+            DEBIAN_ARCH=s390x
+            MESON_CPUFAMILY="s390x"
+            MESON_ENDIAN=big
+            ;;
+        x86_64-linux*-gnu|amd64-linux*-gnu)
+            DEBIAN_ARCH=amd64
+            MESON_CPUFAMILY="x86_64"
+            ;;
+        # DEVELOPMENT
+        i386-gnu|i586-gnu|i686-gnu)
+            DEBIAN_ARCH=hurd-i386
+            MESON_CPUFAMILY=x86
+            ;;
+        loongarch64-linux*-gnu)
+            DEBIAN_ARCH=loong64
+            MESON_CPUFAMILY=loongarch64
+            ;;
+        mips64el-linux*-gnuabi64)
+            DEBIAN_ARCH="mips64el"
+            MESON_CPUFAMILY="mips64"
+            ;;
+        powerpc-linux*-gnuspe)
+            DEBIAN_ARCH="powerpcspe"
+            MESON_CPUFAMILY="ppc"
+            MESON_ENDIAN=big
+            ;;
+        powerpc64-linux*-gnu)
+            DEBIAN_ARCH=ppc64
+            MESON_CPUFAMILY="ppc64"
+            MESON_ENDIAN=big
+            ;;
+        riscv64-linux*-gnu)
+            DEBIAN_ARCH="riscv64"
+            MESON_CPUFAMILY="riscv64"
+            ;;
+        sh4-linux*-gnu)
+            DEBIAN_ARCH=sh4
+            MESON_CPUFAMILY="sh4"
+            ;;
+        sparc64-linux*-gnu)
+            DEBIAN_ARCH=sparc64
+            MESON_CPUFAMILY="sparc64"
+            MESON_ENDIAN=big
+            ;;
+        x86_64-gnu|amd64-gnu)
+            DEBIAN_ARCH=hurd-amd64
+            MESON_CPUFAMILY="x86_64"
+            ;;
+        # PLANNING
+        arc-linux*-gnu)
+            DEBIAN_ARCH=arc
+            MESON_CPUFAMILY=arc
+            ;;
+        mipsisa32r6el-linux*-gnu)
+            DEBIAN_ARCH=mipsr6el
+            MESON_CPUFAMILY=mips
+            ;;
+        mipsisa64r6el-linux*-gnuabi64)
+            DEBIAN_ARCH=mips64r6
+            MESON_CPUFAMILY=mips64
+            ;;
+        # NONE
+        aarch64-linux*-gnu_ilp32)
+            DEBIAN_ARCH=arm64ilp32
+            MESON_CPUFAMILY=aarch64
+            ;;
+        mips64-linux*-gnuabi64)
+            DEBIAN_ARCH=mips64
+            MESON_CPUFAMILY=mips64
+            MESON_ENDIAN=big
+            ;;
+        mips64-linux*-gnuabin32)
+            DEBIAN_ARCH=mipsn32
+            MESON_CPUFAMILY=mips64
+            MESON_ENDIAN=big
+            ;;
+        mips64el-linux*-gnuabin32)
+            DEBIAN_ARCH=mipsn32el
+            MESON_CPUFAMILY=mips64
+            ;;
+        mipsisa32r6-linux*-gnu)
+            DEBIAN_ARCH=mipsr6
+            MESON_CPUFAMILY=mips
+            MESON_ENDIAN=big
+            ;;
+        mipsisa64r6-linux*-gnuabi64)
+            DEBIAN_ARCH=mips64r6
+            MESON_CPUFAMILY=mips64
+            MESON_ENDIAN=big
+            ;;
+        mipsisa64r6-linux*-gnuabin32)
+            DEBIAN_ARCH=mipsn32r6
+            MESON_CPUFAMILY=mips64
+            MESON_ENDIAN=big
+            ;;
+        mipsisa64r6el-linux*-gnuabin32)
+            DEBIAN_ARCH=mipsn32r6el
+            MESON_CPUFAMILY=mips64
+            ;;
+        x86_64-linux*-gnux32)
+            DEBIAN_ARCH=x32
+            MESON_CPUFAMILY=x86_64
+            ;;
+        # EOL
+        alpha-linux*-gnu)
+            DEBIAN_ARCH=alpha
+            MESON_CPUFAMILY=alpha
+            ;;
+        arm-linux*-gnu)
+            DEBIAN_ARCH=arm
+            MESON_CPUFAMILY=arm
+            ;;
+        i386-kfreebsd*-gnu|i586-kfreebsd*-gnu|i686-kfreebsd*-gnu)         
+            DEBIAN_ARCH=kfreebsd-i386
+            MESON_CPUFAMILY="x86"
+            ;;
+        ia64-linux*-gnu)
+            DEBIAN_ARCH=ia64
+            MESON_CPUFAMILY=ia64
+            ;;
+        hppa-linux*-gnu)
+            DEBIAN_ARCH=hppa
+            MESON_CPUFAMILY=parisc
+            MESON_ENDIAN=big
+            ;;
+        m68k-linux*-gnu)
+            DEBIAN_ARCH=m68k
+            MESON_CPUFAMILY=m68k
+            MESON_ENDIAN=big
+            ;;
+        mips-linux*-gnu*)
+            DEBIAN_ARCH="mips"
+            MESON_CPUFAMILY="mips"
+            MESON_ENDIAN=big
+            ;;
+        powerpc-linux*-gnu)
+            DEBIAN_ARCH=powerpc
+            MESON_CPUFAMILY="ppc"
+            MESON_ENDIAN=big
+            ;;
+        s390-linux*-gnu)
+            DEBIAN_ARCH=s390
+            MESON_CPUFAMILY="s390"
+            MESON_ENDIAN=big
+            ;;
+        sparc-linux*-gnu)
+            DEBIAN_ARCH=sparc
+            MESON_CPUFAMILY="sparc"
+            MESON_ENDIAN=big
+            ;;
+        x86_64-kfreebsd*-gnu|amd64-kfreebsd*-gnu)
+            DEBIAN_ARCH=kfreebsd-amd64
             MESON_CPUFAMILY="x86_64"
             ;;
         *)                      
@@ -96,7 +343,7 @@ work_out_debs () {
 }
 EOF
 
-    1>&2 FORCE_REQUIRED="libstdc++-${DEBIAN_GCC}-dev" ${FAKEROOT} ${DEBOOTSTRAP} \
+    1>&2 FORCE_REQUIRED="libstdc++-${DEBIAN_GCC}-dev" ${FAKEROOT} "${DEBOOTSTRAP}" \
         "$@" --arch="${DEBIAN_ARCH}" \
         --cache-dir="${cache_dir_abs}"/debian \
         "${DEBIAN_NAME}" "${db_tmp}" \
@@ -114,7 +361,9 @@ debian_emit_bom() {
         while read -r pkg version url pkgd file; do
             test "${pkg}" = "${pkgd}" || echo mismatch at "${pkg}"
             # 1>&2 echo PKG="${pkg}" URL="${url}" FILE="$(basename "${file}")"
-            printf "%s %s %s %s\n" "${pkg}" "${version}" "${url}" debian/"$(basename "${file}")"
+            debfile="debian/$(basename "${file}")"
+            sha256="$(${SHA256} -q "${CACHE_DIR}/${debfile}")"
+            printf "%s %s %s %s %s\n" "${pkg}" "${version}" "${url}" "${debfile}" "${sha256}"
         done
 }
 
@@ -127,8 +376,8 @@ debian_fixup() {
         test -e "${KSYSROOT_SYSROOT}"/"$b" || ln -s usr/"$b" "${KSYSROOT_SYSROOT}"/"$b"
     done
 
-    KSYSROOT_TRIPLE="$(basename "$(ls -d "${KSYSROOT_SYSROOT}"/usr/lib/*gnu)")"
-    KSYSROOT_FULL_TRIPLE="${KSYSROOT_TRIPLE%linux*-gnu}linux${LINUX_VERSION}-gnu"
+    KSYSROOT_TRIPLE="$(basename "$(ls -d "${KSYSROOT_SYSROOT}"/usr/lib/*gnu*)")"
+    KSYSROOT_FULL_TRIPLE="$(printf "%s" "${KSYSROOT_TRIPLE}" | sed "s/linux/linux${LINUX_VERSION}/")"
 
     ksysroot_emit /usr/lib/"${KSYSROOT_TRIPLE}" /usr/lib/"${KSYSROOT_TRIPLE}"/pkgconfig
 }
@@ -149,8 +398,8 @@ ksysroot_debian_bom() {
 
     LINUX_VERSION="$(sed -nE 's/^linux-libc-dev[[:space:]]+([0-9]+)\.([0-9]+).*$/\1.\2/p' "${db_tmp}"/debootstrap/deburis)"
     LIBC6_DEB="$(sed -nE 's/^libc6 (.*)/\1/p' "${db_tmp}"/debootstrap/debpaths)"
-    KSYSROOT_TRIPLE="$(undeb "${db_tmp}${LIBC6_DEB}" --list ./usr/lib | sed -nE 's%^./usr/lib/(.*-linux-gnu)/.*$%\1%p' | uniq)"
-    KSYSROOT_FULL_TRIPLE="${KSYSROOT_TRIPLE%linux*-gnu}linux${LINUX_VERSION}-gnu"
+    KSYSROOT_TRIPLE="$(undeb "${db_tmp}${LIBC6_DEB}" --list ./usr/lib | sed -nE 's%^./usr/lib/(.*-linux-gnu[0-9a-z]*)/.*$%\1%p' | uniq)"
+    KSYSROOT_FULL_TRIPLE="$(printf "%s" "${KSYSROOT_TRIPLE}" | sed "s/linux/linux${LINUX_VERSION}/")"
 
     ksysroot_bomconstants
     printf "# DEBIAN_VERSION=%s DEBIAN_NAME=%s DEBIAN_GCC=%s\n" "${DEBIAN_VERSION}" "${DEBIAN_NAME}"  "${DEBIAN_GCC}"
@@ -165,17 +414,19 @@ ksysroot_debian_bomresource() {
     local version="$2"
     local url="$3"
     local file="$4"
+    local sha256="$5"
 
     if [ "${pkg}" = linux-libc-dev ]; then
         local suffix="${version#*.*.}"
         LINUX_VERSION="${version%."${suffix}"}"
     fi
-    cache "${url}" "${file}"
+    local cached_deb
+    cached_deb="$(cache "${url}" "${file}" "${sha256}")"
 
     # NB: HFS+ is case preserving, not case-sensitive, hence 
     # usr/include/linux/netfilter/xt_CONNMARK.h and usr/include/linux/netfilter/xt_connmark.h
     # will overwrite each other
-    undeb "${CACHE_DIR}/${file}" -C "${KSYSROOT_SYSROOT}" --extract \
+    undeb "${cached_deb}" -C "${KSYSROOT_SYSROOT}" --extract \
         --exclude ./etc --exclude "./*bin" --exclude "./*/*bin" --exclude ./var \
         -s '%\./lib\(.*\)%./usr/lib\1%'
 }

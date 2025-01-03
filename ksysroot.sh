@@ -65,7 +65,8 @@ ksysroot_test_meson() {
 ksysroot_test_pkgconf() {
     local ksysroot_dir="$1"
     local PKG_CONFIG
-    PKG_CONFIG=$("${ksysroot_dir}"/bin/*-env sh -c 'echo "${PKG_CONFIG}"')
+    local env="${ksysroot_dir}/bin/*-env"
+    PKG_CONFIG="$(${env} sh -c "echo \${PKG_CONFIG}")"
     echo PKG_CONFIG="${PKG_CONFIG}"
     "${PKG_CONFIG}" --list-all
 }
@@ -128,6 +129,8 @@ dispatch() {
             ksysroot_frombom "$@"
             ;;
         iterate*)
+            ksysroot_native_"${cmd}"
+            ksysroot_debian_"${cmd}"
             ksysroot_freebsd_"${cmd}"
             ;;
         *)

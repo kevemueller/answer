@@ -30,6 +30,7 @@ require_tool() {
 : "${CURL:=$(require_tool curl)}"
 : "${FIND:=$(require_tool find)}"
 : "${READLINK:=$(require_tool readlink)}"
+: "${SHA256:=$(require_tool sha256)}"
 : "${XARGS:=$(require_tool xargs)}"
 
 quote_snippet() {
@@ -76,11 +77,26 @@ EOF
 cache() {
     local url="$1"
     local base="${2:-$(basename "${url}")}"
+    local sha256="$3"
+
     local cache_file="${CACHE_DIR}/${base}"
     >&2 echo Caching "${url}" to "${cache_file}"
     mkdir -p "$(dirname "${cache_file}")"
     echo "${url}" > "${cache_file}".url
-    test -f "${cache_file}" || ${CURL} --fail -o "${cache_file}" "${url}"
+    if [ -e "${cache_file}" ] && [ "${sha256}" ] && ${SHA256} -c "${sha256}" "${cache_file}" >/dev/null; then
+        # 2>&1 echo SHA matched
+        echo "${cache_file}"
+        return 0
+    fi
+    ${CURL} --disable --cookie /dev/null --show-error --fail \
+        --location --remote-time \
+        -o "${cache_file}" "${url}"
+    if [ "${sha256}" ] && ! ${SHA256} -c "${sha256}" "${cache_file}"; then
+        2>&1 Freshly downloaded "${url}" does not match expected SHA-256 "${sha256}", removing it.
+        rm "${cache_file}"
+        echo /dev/null
+        return 1
+    fi
     echo "${cache_file}"
 }
 
@@ -342,15 +358,23 @@ ksysroot_frombom() {
     ksysroot_prefix "$1"
 
     mkdir -p "${KSYSROOT_SYSROOT}"
-    local pkg version url file
-    while read -r pkg version url file; do
-        1>&2 echo PKG="${pkg}" VERSION="${version}" URL="${url}" FILE="${file}"
+    local pkg version url file sha256
+    while read -r pkg version url file sha256; do
+        1>&2 echo PKG="${pkg}" VERSION="${version}" URL="${url}" FILE="${file}" SHA256="${sha256}"
         if [ "${pkg}" = "#" ]; then
             # shellcheck disable=SC2046
-            export $(echo "${version}" "${url}" "${file}" | ${XARGS})
+            export $(echo "${version}" "${url}" "${file}" "${sha256}" | ${XARGS})
         else
-            ksysroot_"${KSYSROOT_OSFLAVOUR}"_bomresource "${pkg}" "${version}" "${url}" "${file}"
+            if [ "${KSYSROOT_TRIPLE}" = "native" ]; then
+                ksysroot_native_bomresource "${pkg}" "${version}" "${url}" "${file}" "${sha256}"
+            else
+                ksysroot_"${KSYSROOT_OSFLAVOUR}"_bomresource "${pkg}" "${version}" "${url}" "${file}" "${sha256}"
+            fi
         fi
     done < "${2:-/dev/fd/0}"
-    ksysroot_"${KSYSROOT_OSFLAVOUR}"_bomclose
+    if [ "${KSYSROOT_TRIPLE}" = "native" ]; then
+        ksysroot_native_bomclose
+    else
+        ksysroot_"${KSYSROOT_OSFLAVOUR}"_bomclose
+    fi
 }
