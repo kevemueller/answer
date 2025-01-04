@@ -81,7 +81,8 @@ freebsd_quirks() {
                 "Homebrew clang"*)
                     # Homebrew Clang on Ubuntu fails to detect libc++
                     # Ubuntu Clang & Homebrew Clang on MacOS are fine 
-                    KSYSROOT_CPP_QUIRK_ARGS="-stdlib=libc++"
+                    KSYSROOT_CPP_QUIRK_ARGS_WRAP="-stdlib=libc++"
+                    KSYSROOT_CPP_QUIRK_ARGS_MESON="'-stdlib=libc++'"
                     ;;
                 *)
                     ;;

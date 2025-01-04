@@ -33,6 +33,19 @@ fi
 . "${KSYSROOT_PREFIX}"/functions-debian
 . "${KSYSROOT_PREFIX}"/functions-freebsd
 
+
+ksysroot_test_wrapper() {
+    local ksysroot_dir="$1"
+    local env="${ksysroot_dir}/bin/*-env"
+
+    for i in CC CC_FOR_BUILD CXX CXX_FOR_BUILD CPP CPP_FOR_BUILD LD LD_FOR_BUILD \
+            AR AS NM OBJCOPY OBJDUMP RANLIB READELF SIZE STRINGS STRIP; do
+        WRAPPER="$(${env} sh -c "echo \${$i}")"
+        echo "$i"="${WRAPPER}"
+        "${WRAPPER}" --version
+        echo
+    done
+}
 ksysroot_test_meson() {
     : "${MESON:=$(require_tool meson)}"
     : "${MESON_SETUP_ARGS:=}"
@@ -71,7 +84,9 @@ ksysroot_test_pkgconf() {
     "${PKG_CONFIG}" --list-all
 }
 
+
 ksysroot_test() {
+    ksysroot_test_wrapper "$@"
     ksysroot_test_pkgconf "$@"
     ksysroot_test_meson "$@"
 }
@@ -79,50 +94,28 @@ ksysroot_test() {
 test_all() {
     test_sysroot native
 
-    # fix backports with Debian
-    # armel-linux-gnu
-    # mips64-linux-gnu
-    # powerpc64-linux-gnu
-    # riscv64-linux-gnu
-    # mips64-linux-gnu
-
     # add from Alpine or OpenWRT
     # x86_64-linux-musl
     # arm-linux-musleabi 
     # arm-linux-musleabihf
-    # for triple in aarch64-linux-gnu i686-linux-gnu x86_64-linux-gnu; do
-    #     for version in 12 13; do
-    #         test_sysroot ${triple}@debian${version}
-    #     done
-    # done
-
-    for triple in aarch64-freebsd x86_64-freebsd i386-freebsd; do
-    # for triple in x86_64-freebsd; do
-        for version in 15.0-CURRENT 14.2-RELEASE 14.1-RELEASE 13.4-RELEASE 13.3-RELEASE; do
-            test_sysroot ${triple}${version%.*}@freebsd${version}
-        done
-    done
 }
 
 usage() {
         echo Usage:
-        echo     "$0" bom triple
-        echo     "$0" frombom target-directory [bomfile]
-        echo     "$0" install triple target-directory
-        echo     "$0" test directory
-        echo     "$0" test_meson directory
-        echo     "$0" test_pkgconf directory
-        echo     "$0" iterate
-        echo     "$0" iterate1
-        echo     "$0" iterate2
-        echo     "$0" iterate3
+        echo     "$0" "bom triple"
+        echo     "$0" "frombom target-directory [bomfile]"
+        echo     "$0" "install triple target-directory"
+        echo     "$0" "test directory"
+        echo     "$0" "test_{wrapper|meson|pkgconf} directory"
+        echo     "$0" "iterate"
+        echo     "$0" "iterate{1|2|3}"
 }
 
 dispatch() {
     local cmd="$1"
     shift
     case "${cmd}" in
-        test|test_meson|test_pkgconf)
+        test|test_wrapper|test_meson|test_pkgconf)
             ksysroot_"${cmd}" "$1"
             ;;
         frombom)

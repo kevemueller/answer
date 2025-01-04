@@ -14,7 +14,7 @@ undeb() {
 
 DEBIAN_TIER1="aarch64 x86_64"
 DEBIAN_TIER2="i586 mips64el powerpc64le"
-DEBIAN_TIER3="armel armhf mipsel powerpc s390x"
+DEBIAN_TIER3="armel armhf mipsel s390x"
 
 DEBIAN_PRODUCTION1="12"
 DEBIAN_PRODUCTION2="13"
@@ -104,6 +104,10 @@ ksysroot_debian_iterate() {
 ksysroot_debian_meta() {
     local basetriple="${1%@*}"
     local flavour="${1#*@}"
+
+    if [ "${basetriple}" = "${flavour}" ]; then
+        flavour=debian12
+    fi
 
     DEBIAN_VERSION="${flavour#debian}"
     1>&2 echo input="$1" basetriple="${basetriple}" flavour="${flavour}"
@@ -328,11 +332,23 @@ ksysroot_debian_meta() {
     KSYSROOT_LINKER="ld.lld"
 }
 
+debian_quirks() {
+    case "${KSYSROOT_TRIPLE}" in
+        powerpc64le-linux-gnu)
+            KSYSROOT_COMMON_QUIRK_ARGS_MESON="'--gcc-install-dir=' + sysroot / 'usr/lib/gcc/${KSYSROOT_TRIPLE}/${DEBIAN_GCC}'"
+            KSYSROOT_COMMON_QUIRK_ARGS_WRAP="'--gcc-install-dir=' + sysroot / 'usr/lib/gcc/${KSYSROOT_TRIPLE}/${DEBIAN_GCC}'"
+            ;;
+        *)
+            ;;
+    esac
+}
+
+
 call_debootstrap() {
     local cache_dir_abs
     cache_dir_abs="$(readlink -f "${CACHE_DIR}")"
     local db_tmp mixin
-    db_tmp="$(${MKTEMP} -d ksysroot-debootstrap-XXXXXX)"
+    db_tmp="$(${MKTEMP} -d "${CACHE_DIR}"/ksysroot-debootstrap-XXXXXX)"
     mixin="$(${MKTEMP})"
     cat > "${mixin}" <<'EOF'
 . "${DEBOOTSTRAP_DIR}"/scripts/"${SUITE}"
@@ -379,6 +395,7 @@ debian_fixup() {
     KSYSROOT_TRIPLE="$(basename "$(ls -d "${KSYSROOT_SYSROOT}"/usr/lib/*gnu*)")"
     KSYSROOT_FULL_TRIPLE="$(printf "%s" "${KSYSROOT_TRIPLE}" | sed "s/linux/linux${LINUX_VERSION}/")"
 
+    debian_quirks
     ksysroot_emit /usr/lib/"${KSYSROOT_TRIPLE}" /usr/lib/"${KSYSROOT_TRIPLE}"/pkgconfig
 }
 
