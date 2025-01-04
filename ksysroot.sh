@@ -19,8 +19,8 @@ if command -v brew >/dev/null; then
 : "${LLD_DIR:=$(brew --prefix lld)/bin}"
 : "${PKG_CONFIG:=$(brew --prefix pkgconf)/bin/pkg-config}"
 else
-: "${LLVM_DIR:=$(dirname "$(require_tool clang)")}"
-: "${LLD_DIR:=$(dirname "$(require_tool lld)")}"
+: "${LLVM_DIR:=$(dirname "$(realpath "$(require_tool clang)")")}"
+: "${LLD_DIR:=$(dirname "$(realpath "$(require_tool lld)")")}"
 : "${PKG_CONFIG:=$(require_tool pkg-config)}"
 fi
 
