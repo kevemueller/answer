@@ -445,7 +445,7 @@ ksysroot_debian_bomresource() {
     # will overwrite each other
     undeb "${cached_deb}" -C "${KSYSROOT_SYSROOT}" --extract \
         --exclude ./etc --exclude "./*bin" --exclude "./*/*bin" --exclude ./var \
-        -s '%\./lib\(.*\)%./usr/lib\1%'
+        -s '%^\./lib\(.*\)%./usr/lib\1%'
 }
 
 ksysroot_debian_bomclose() {
