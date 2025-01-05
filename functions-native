@@ -27,8 +27,8 @@ ksysroot_native_meta() {
         Linux)
             MESON_SYSTEM=linux
             : "${LSB_RELEASE:=$(require_tool lsb_release)}"
-            KSYSROOT_OSFLAVOUR="$(${LSB_RELEASE} -i | tr "[:upper:]" "[:lower:]")"
-            KSYSROOT_OSRELEASE="$(${LSB_RELEASE} -r)"
+            KSYSROOT_OSFLAVOUR="$(${LSB_RELEASE} -si | tr "[:upper:]" "[:lower:]")"
+            KSYSROOT_OSRELEASE="$(${LSB_RELEASE} -sr)"
             ;;
         *)
             MESON_SYSTEM=unknown

@@ -36,11 +36,13 @@ jobs:
           - x86_64-freebsd@freebsd14.2-RELEASE
           - aarch64-linux-gnu@debian12
           - x86_64-linux-gnu@debian12
+          - aarch64-linux-gnu@debian13
+          - x86_64-linux-gnu@debian13
         include:
           - build-os-pkg: macos-15
             build-os: macos-15
             pkg: native
-            compiler: clang-18
+            compiler: clang-19
             pkgs:
               - llvm
               - lld
@@ -125,7 +127,7 @@ jobs:
           # echo "LLVM_DIR=$(brew --prefix llvm@18)/bin" >> "${GITHUB_ENV}"
           echo "MESON_COMPILE_ARGS=-v" >> "${GITHUB_ENV}"
           
-      - name: install ksysroot
+      - name: install ksysroot (install)
         run: |
           echo uname -a: $(uname -a)
           echo uname -m: $(uname -m)
@@ -134,6 +136,16 @@ jobs:
           echo INST_KSYSROOT="${INST_KSYSROOT}"
           ${SRC_KSYSROOT}/ksysroot.sh install "${{ matrix.cross }}" "${INST_KSYSROOT}"
 
-      - name: check ksysroot
+      - name: check ksysroot (install)
         run: |
           ${SRC_KSYSROOT}/ksysroot.sh test "${INST_KSYSROOT}"
+ 
+      - name: install ksysroot (bom/frombom)
+        run: |
+          echo SRC_KSYSROOT="${SRC_KSYSROOT}"
+          echo INST_KSYSROOT="${INST_KSYSROOT}"
+          ${SRC_KSYSROOT}/ksysroot.sh bom "${{ matrix.cross }}" | tee "${GITHUB_STEP_SUMMARY}" |  ${SRC_KSYSROOT}/ksysroot.sh frombom "${INST_KSYSROOT}".bom
+
+      - name: check ksysroot (bom/frombom)
+        run: |
+          ${SRC_KSYSROOT}/ksysroot.sh test "${INST_KSYSROOT}".bom
