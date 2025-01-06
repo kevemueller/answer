@@ -169,6 +169,7 @@ ksysroot_freebsd_meta() {
     # x86_64-unknown-freebsd13.2
     KSYSROOT_FULL_TRIPLE="${basetriple}"
     KSYSROOT_LINKER="ld.lld"
+    KSYSROOT_LICENSE="BSD-2-Clause"
 }
 
 # $1 - flavoured base triple

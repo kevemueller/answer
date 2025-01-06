@@ -330,13 +330,14 @@ ksysroot_debian_meta() {
     : "${MESON_ENDIAN:=little}"
     MESON_SYSTEM="linux"
     KSYSROOT_LINKER="ld.lld"
+    KSYSROOT_LICENSE="GPL-2.0-or-later"
 }
 
 debian_quirks() {
     case "${KSYSROOT_TRIPLE}" in
-        powerpc64le-linux-gnu)
+        powerpc64le-linux-gnu|s390x-linux-gnu)
             KSYSROOT_COMMON_QUIRK_ARGS_MESON="'--gcc-install-dir=' + sysroot / 'usr/lib/gcc/${KSYSROOT_TRIPLE}/${DEBIAN_GCC}'"
-            KSYSROOT_COMMON_QUIRK_ARGS_WRAP="'--gcc-install-dir=' + sysroot / 'usr/lib/gcc/${KSYSROOT_TRIPLE}/${DEBIAN_GCC}'"
+            KSYSROOT_COMMON_QUIRK_ARGS_WRAP="--gcc-install-dir=\"${KSYSROOT_SYSROOT}/usr/lib/gcc/${KSYSROOT_TRIPLE}/${DEBIAN_GCC}\""
             ;;
         *)
             ;;
