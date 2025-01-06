@@ -6,25 +6,25 @@ set -e
 # $1 tool
 # $2.. optional additional paths
 require_tool() {
-    local tool="$1"
-    shift
+  local tool="$1"
+  shift
 
-    for i in "$@"; do
-        if [ -x "$i/${tool}" ]; then
-            echo "$i/${tool}"
-            return 0
-        fi
-    done
-
-    local toolpath
-    if ! toolpath="$(command -v "${tool}" 2>/dev/null)"; then
-        1>&2 echo This script requires the "${tool}" executable. If you have that outside of PATH
-        1>&2 echo you can point at it using the environment variable "$(echo "${tool}" | tr '[:lower:]' '[:upper:]')".
-        echo /usr/bin/false
-        return 1
+  for i in "$@"; do
+    if [ -x "$i/${tool}" ]; then
+      echo "$i/${tool}"
+      return 0
     fi
-    echo "${toolpath}"
-    return 0
+  done
+
+  local toolpath
+  if ! toolpath="$(command -v "${tool}" 2>/dev/null)"; then
+    1>&2 echo This script requires the "${tool}" executable. If you have that outside of PATH
+    1>&2 echo you can point at it using the environment variable "$(echo "${tool}" | tr '[:lower:]' '[:upper:]')".
+    echo /usr/bin/false
+    return 1
+  fi
+  echo "${toolpath}"
+  return 0
 }
 
 : "${CURL:=$(require_tool curl)}"
@@ -34,105 +34,103 @@ require_tool() {
 : "${XARGS:=$(require_tool xargs)}"
 
 quote_snippet() {
-    for i in "$@"; do
-        set -- "$@" \'"$i"\'
-    done
+  for i in "$@"; do
+    set -- "$@" \'"$i"\'
+  done
 }
 
 join_with_prefix() {
-    local separator="$1"
-    local prefix="$2"
-    shift 2
+  local separator="$1"
+  local prefix="$2"
+  shift 2
 
-    if [ $# -eq 0 ]; then
-        return 0
-    fi
+  if [ $# -eq 0 ]; then
+    return 0
+  fi
 
-    printf "%s" "${prefix}$1"
+  printf "%s" "${prefix}$1"
+  shift
+  while [ $# -gt 0 ]; do
+    printf "%s" "${separator}${prefix}$1"
     shift
-    while [ $# -gt 0 ]; do
-        printf "%s" "${separator}${prefix}$1"
-        shift
-    done
+  done
 }
 
 # create a wrapper with additional prepended arguments
 # if no arguments are given, a symlink will do
 mk_wrapper() {
-    local tgt_file="$1"
-    shift
-    if [ $# -eq 1 ]; then
-        ln -s "$1" "${tgt_file}"
-    else
-        cat >"${tgt_file}" <<EOF
+  local tgt_file="$1"
+  shift
+  if [ $# -eq 1 ]; then
+    ln -s "$1" "${tgt_file}"
+  else
+    cat >"${tgt_file}" <<EOF
 #!/bin/sh
 exec $@ "\$@"
 EOF
-        chmod +x "${tgt_file}"
-    fi
+    chmod +x "${tgt_file}"
+  fi
 }
 
 # $1 - checksum
 # $2 - file
 shacheck() {
-    echo "$1 $2" | ${SHA256SUM} --check - --status
+  echo "$1 $2" | ${SHA256SUM} --check - --status
 }
 # $1 - file
 shacompute() {
-    ${SHA256SUM} "$1" | cut -d" " -f 1
+  ${SHA256SUM} "$1" | cut -d" " -f 1
 }
 
-
 cache() {
-    local url="$1"
-    local base="${2:-$(basename "${url}")}"
-    local sha256="$3"
+  local url="$1"
+  local base="${2:-$(basename "${url}")}"
+  local sha256="$3"
 
-    local cache_file="${CACHE_DIR}/${base}"
-    >&2 echo Caching "${url}" to "${cache_file}"
-    mkdir -p "$(dirname "${cache_file}")"
-    echo "${url}" > "${cache_file}".url
-    if [ -e "${cache_file}" ] && [ "${sha256}" ] && shacheck "${sha256}" "${cache_file}"; then
-        # 2>&1 echo SHA matched
-        echo "${cache_file}"
-        return 0
-    fi
-    ${CURL} --disable --cookie /dev/null --show-error --fail \
-        --location --remote-time \
-        -o "${cache_file}" "${url}"
-    if [ "${sha256}" ] && ! shacheck "${sha256}" "${cache_file}"; then
-        2>&1 Freshly downloaded "${url}" does not match expected SHA-256 "${sha256}", removing it.
-        rm "${cache_file}"
-        echo /dev/null
-        return 1
-    fi
+  local cache_file="${CACHE_DIR}/${base}"
+  >&2 echo Caching "${url}" to "${cache_file}"
+  mkdir -p "$(dirname "${cache_file}")"
+  echo "${url}" >"${cache_file}".url
+  if [ -e "${cache_file}" ] && [ "${sha256}" ] && shacheck "${sha256}" "${cache_file}"; then
+    # 2>&1 echo SHA matched
     echo "${cache_file}"
+    return 0
+  fi
+  ${CURL} --disable --cookie /dev/null --show-error --fail \
+    --location --remote-time \
+    -o "${cache_file}" "${url}"
+  if [ "${sha256}" ] && ! shacheck "${sha256}" "${cache_file}"; then
+    2>&1 Freshly downloaded "${url}" does not match expected SHA-256 "${sha256}", removing it.
+    rm "${cache_file}"
+    echo /dev/null
+    return 1
+  fi
+  echo "${cache_file}"
 }
 
 fix_abs_link() {
-    local file
-    local abs_link
-    local dir
+  local file
+  local abs_link
+  local dir
 
-    ${FIND} "$1" -lname "/*" | while IFS= read -r file; do
-        abs_link="$(readlink "${file}")"
-        dir="$(dirname "${file}")"
-        dir="$(echo "${dir#"$1"}" | sed -E 's%/([^/]+)%../%g')"
-        dir="${dir%/}"
-        ln -sf "${dir}${abs_link}" "${file}"
-    done
+  ${FIND} "$1" -lname "/*" | while IFS= read -r file; do
+    abs_link="$(readlink "${file}")"
+    dir="$(dirname "${file}")"
+    dir="$(echo "${dir#"$1"}" | sed -E 's%/([^/]+)%../%g')"
+    dir="${dir%/}"
+    ln -sf "${dir}${abs_link}" "${file}"
+  done
 }
 
 ### emitters
 
-
 # environment definition for legacy tooling
 # we use the wrappers
 emit_meta_env() {
-    cat <<EOF
+  cat <<EOF
 #!/bin/sh
 if [ \$# -ne 0 ]; then
-	set -a
+  set -a
 fi
 
 KSYSROOT_SYSROOT="${KSYSROOT_SYSROOT}"
@@ -166,22 +164,21 @@ STRINGS=\${LLVM_DIR}/llvm-strings
 STRIP=\${LLVM_DIR}/llvm-strip
 
 if [ \$# -ne 0 ]; then
-	exec "\$@"
+  exec "\$@"
 fi
 EOF
 }
-
 
 # emit cross pkg-config personality
 # $1 - libpath
 # $@ - pkgconfig_paths
 emit_meta_pc() {
-    local libpath="$1"
-    shift 1
-    local pkgconfig_paths
-    pkgconfig_paths="$(join_with_prefix : "${KSYSROOT_SYSROOT}" "$@")"
+  local libpath="$1"
+  shift 1
+  local pkgconfig_paths
+  pkgconfig_paths="$(join_with_prefix : "${KSYSROOT_SYSROOT}" "$@")"
 
-    cat <<EOF
+  cat <<EOF
 Triplet: ${KSYSROOT_FULL_TRIPLE}
 SysrootDir: ${KSYSROOT_SYSROOT}
 DefaultSearchPaths: ${pkgconfig_paths}
@@ -195,22 +192,22 @@ EOF
 #   sysroot -- our sysroot
 #   triple  -- our triple
 #   llvm_dir_${name} - directory to llvm
-# With Meson we don't need to use the wrappers! 
+# With Meson we don't need to use the wrappers!
 emit_meta_llvm() {
-    local name="$1"
-    local ld
+  local name="$1"
+  local ld
 
-    local pkg_config=
+  local pkg_config=
 
-    if [ "${name}" = "native" ]; then
-        pkg_config="'${PKG_CONFIG}'"
-        ld="${NATIVE_LINKER}"
-    else
-        pkg_config="ksysroot_dir_${name} / 'bin' / triple + '-pkg-config'"
-        ld="${KSYSROOT_LINKER}"
-    fi
+  if [ "${name}" = "native" ]; then
+    pkg_config="'${PKG_CONFIG}'"
+    ld="${NATIVE_LINKER}"
+  else
+    pkg_config="ksysroot_dir_${name} / 'bin' / triple + '-pkg-config'"
+    ld="${KSYSROOT_LINKER}"
+  fi
 
-    cat <<EOF
+  cat <<EOF
 [binaries]
 llvm-config = llvm_dir_${name} / 'llvm-config'
 pkg-config = ${pkg_config}
@@ -242,23 +239,23 @@ EOF
 # $1 - name
 # $@ - pkg_config paths
 emit_meta_llvm_cross() {
-    local name="$1"
-    shift
-    local first=yes
+  local name="$1"
+  shift
+  local first=yes
 
-    for i in "$@"; do
-        if [ "${first}" = "yes" ]; then
-            set --
-            first=no
-        fi
-        set -- "$@" \'"${i#/}"\'
-    done
-    local pkgconfig_paths
-    pkgconfig_paths="$(join_with_prefix " + ':' + " "sysroot / " "$@")"
+  for i in "$@"; do
+    if [ "${first}" = "yes" ]; then
+      set --
+      first=no
+    fi
+    set -- "$@" \'"${i#/}"\'
+  done
+  local pkgconfig_paths
+  pkgconfig_paths="$(join_with_prefix " + ':' + " "sysroot / " "$@")"
 
-    emit_meta_llvm "${name}"
+  emit_meta_llvm "${name}"
 
-    cat <<EOF
+  cat <<EOF
 triple = '${KSYSROOT_FULL_TRIPLE}'
 sysroot = '${KSYSROOT_SYSROOT}'
 common_quirk_args = [${KSYSROOT_COMMON_QUIRK_ARGS_MESON}]
@@ -284,105 +281,107 @@ pkg_config_path = ${pkgconfig_paths}
 EOF
 }
 
-
 # create wrappers for legacy uses
 mk_wrappers() {
-    mkdir -p "${KSYSROOT_PREFIX_ABS}"/bin
-    local sysroot_args=
-    local common_args="${KSYSROOT_COMMON_QUIRK_ARGS_WRAP}"
-    local pkgconf_args=
-    local ld_args=
+  mkdir -p "${KSYSROOT_PREFIX_ABS}"/bin
+  local sysroot_args=
+  local common_args="${KSYSROOT_COMMON_QUIRK_ARGS_WRAP}"
+  local pkgconf_args=
+  local useld_args=
 
-    if [ "${KSYSROOT_TRIPLE}" != "native" ]; then
-        sysroot_args="--sysroot=\"${KSYSROOT_SYSROOT}\""
-        common_args="-target ${KSYSROOT_FULL_TRIPLE} ${sysroot_args} ${common_args}"
-        pkgconf_args="--personality=\"${KSYSROOT_PREFIX_ABS}/pkg-config.personality\""
-    fi
-    useld_args="-fuse-ld=\"${LLD_DIR}/${KSYSROOT_LINKER}\""
+  if [ "${KSYSROOT_TRIPLE}" != "native" ]; then
+    # shellcheck disable=SC2089
+    sysroot_args="--sysroot=\"${KSYSROOT_SYSROOT}\""
+    common_args="-target ${KSYSROOT_FULL_TRIPLE} ${sysroot_args} ${common_args}"
+    # shellcheck disable=SC2089
+    pkgconf_args="--personality=\"${KSYSROOT_PREFIX_ABS}/pkg-config.personality\""
+  fi
+  # shellcheck disable=SC2089
+  useld_args="-fuse-ld=\"${LLD_DIR}/${KSYSROOT_LINKER}\""
 
-    local clang_tools="cc c++ cpp"
-    local _llvm_tools="ar as nm objcopy objdump ranlib readelf size strings strip"
+  local clang_tools="cc c++ cpp"
+  local _llvm_tools="ar as nm objcopy objdump ranlib readelf size strings strip"
 
-    # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-pkg-config" "${PKG_CONFIG}" ${pkgconf_args}
-    # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cc" "${LLVM_DIR}"/clang ${common_args} ${useld_args}
-    # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-c++" "${LLVM_DIR}"/clang++ ${common_args} ${KSYSROOT_CPP_QUIRK_ARGS_WRAP} ${useld_args}
-    # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cpp" "${LLVM_DIR}"/clang-cpp ${common_args}
-    # shellcheck disable=SC2086
-    mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-ld" "${LLD_DIR}/${KSYSROOT_LINKER}" ${sysroot_args}
+  # shellcheck disable=SC2086 disable=SC2090
+  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-pkg-config" "${PKG_CONFIG}" ${pkgconf_args}
+  # shellcheck disable=SC2086 disable=SC2090
+  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cc" "${LLVM_DIR}"/clang ${common_args} ${useld_args}
+  # shellcheck disable=SC2086 disable=SC2090
+  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-c++" "${LLVM_DIR}"/clang++ ${common_args} ${KSYSROOT_CPP_QUIRK_ARGS_WRAP} ${useld_args}
+  # shellcheck disable=SC2086 disable=SC2090
+  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cpp" "${LLVM_DIR}"/clang-cpp ${common_args}
+  # shellcheck disable=SC2086 disable=SC2090
+  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-ld" "${LLD_DIR}/${KSYSROOT_LINKER}" ${sysroot_args}
 
-    # do not create unnecessary wrappers
-    # for i in ${llvm_tools}; do
-    #     # shellcheck disable=SC2086
-    #     mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-$i" "${LLVM_DIR}"/llvm-"$i"
-    # done
+  # do not create unnecessary wrappers
+  # for i in ${llvm_tools}; do
+  #     # shellcheck disable=SC2086
+  #     mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-$i" "${LLVM_DIR}"/llvm-"$i"
+  # done
 
-    if [ "${KSYSROOT_TRIPLE}" != "${KSYSROOT_FULL_TRIPLE}" ]; then
-        for i in pkg-config ${clang_tools} ld; do
-            mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_TRIPLE}-$i" "${KSYSROOT_FULL_TRIPLE}-$i"
-        done
-    fi
+  if [ "${KSYSROOT_TRIPLE}" != "${KSYSROOT_FULL_TRIPLE}" ]; then
+    for i in pkg-config ${clang_tools} ld; do
+      mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_TRIPLE}-$i" "${KSYSROOT_FULL_TRIPLE}-$i"
+    done
+  fi
 }
 
 ### common code
 
 ksysroot_prefix() {
-    KSYSROOT_PREFIX="$1"
-    mkdir -p "${KSYSROOT_PREFIX}"
-    KSYSROOT_PREFIX_ABS="$(${READLINK} -f "${KSYSROOT_PREFIX}")"
-    KSYSROOT_SYSROOT="${KSYSROOT_PREFIX_ABS}/cross"
+  KSYSROOT_PREFIX="$1"
+  mkdir -p "${KSYSROOT_PREFIX}"
+  KSYSROOT_PREFIX_ABS="$(${READLINK} -f "${KSYSROOT_PREFIX}")"
+  KSYSROOT_SYSROOT="${KSYSROOT_PREFIX_ABS}/cross"
 }
 
 # $1 - libpath
 # $@ - pkg-config-paths
 ksysroot_emit() {
-    mk_wrappers
-    emit_meta_env > "${KSYSROOT_PREFIX_ABS}"/bin/"${KSYSROOT_FULL_TRIPLE}"-env
-    chmod +x "${KSYSROOT_PREFIX_ABS}"/bin/"${KSYSROOT_FULL_TRIPLE}"-env
-    emit_meta_llvm native  > "${KSYSROOT_PREFIX}"/native.txt
-    if [ "${KSYSROOT_TRIPLE}" != "native" ]; then
-        local libpath="$1"
-        shift
+  mk_wrappers
+  emit_meta_env >"${KSYSROOT_PREFIX_ABS}"/bin/"${KSYSROOT_FULL_TRIPLE}"-env
+  chmod +x "${KSYSROOT_PREFIX_ABS}"/bin/"${KSYSROOT_FULL_TRIPLE}"-env
+  emit_meta_llvm native >"${KSYSROOT_PREFIX}"/native.txt
+  if [ "${KSYSROOT_TRIPLE}" != "native" ]; then
+    local libpath="$1"
+    shift
 
-        emit_meta_pc "${libpath}" "$@" > "${KSYSROOT_PREFIX}"/pkg-config.personality
-        emit_meta_llvm_cross cross  "$@" > "${KSYSROOT_PREFIX}"/cross.txt
-    fi
+    emit_meta_pc "${libpath}" "$@" >"${KSYSROOT_PREFIX}"/pkg-config.personality
+    emit_meta_llvm_cross cross "$@" >"${KSYSROOT_PREFIX}"/cross.txt
+  fi
 }
 
 ksysroot_bomconstants() {
-    printf "# KSYSROOT_TRIPLE=%s KSYSROOT_FULL_TRIPLE=%s\n" "${KSYSROOT_TRIPLE}" "${KSYSROOT_FULL_TRIPLE}"
-    printf "# KSYSROOT_OSFLAVOUR=%s KSYSROOT_OSRELEASE=%s\n" "${KSYSROOT_OSFLAVOUR}" "${KSYSROOT_OSRELEASE}"
-    printf "# KSYSROOT_LINKER=%s\n" "${KSYSROOT_LINKER}"
-    printf "# KSYSROOT_LICENSE=%s\n" "${KSYSROOT_LICENSE}"
-    printf "# MESON_SYSTEM=%s MESON_CPUFAMILY=%s MESON_CPU=%s MESON_ENDIAN=%s\n" "${MESON_SYSTEM}" "${MESON_CPUFAMILY}" "${MESON_CPU}" "${MESON_ENDIAN}"
+  printf "# KSYSROOT_TRIPLE=%s KSYSROOT_FULL_TRIPLE=%s\n" "${KSYSROOT_TRIPLE}" "${KSYSROOT_FULL_TRIPLE}"
+  printf "# KSYSROOT_OSFLAVOUR=%s KSYSROOT_OSRELEASE=%s\n" "${KSYSROOT_OSFLAVOUR}" "${KSYSROOT_OSRELEASE}"
+  printf "# KSYSROOT_LINKER=%s\n" "${KSYSROOT_LINKER}"
+  printf "# KSYSROOT_LICENSE=%s\n" "${KSYSROOT_LICENSE}"
+  printf "# MESON_SYSTEM=%s MESON_CPUFAMILY=%s MESON_CPU=%s MESON_ENDIAN=%s\n" "${MESON_SYSTEM}" "${MESON_CPUFAMILY}" "${MESON_CPU}" "${MESON_ENDIAN}"
 }
 
 # $1 - tgtprefix
 # $2 - optional file, stdin if empty
 ksysroot_frombom() {
-    ksysroot_prefix "$1"
+  ksysroot_prefix "$1"
 
-    mkdir -p "${KSYSROOT_SYSROOT}"
-    local pkg version url file sha256
-    while read -r pkg version url file sha256; do
-        1>&2 echo PKG="${pkg}" VERSION="${version}" URL="${url}" FILE="${file}" SHA256="${sha256}"
-        if [ "${pkg}" = "#" ]; then
-            # shellcheck disable=SC2046
-            export $(echo "${version}" "${url}" "${file}" "${sha256}" | ${XARGS})
-        else
-            if [ "${KSYSROOT_TRIPLE}" = "native" ]; then
-                ksysroot_native_bomresource "${pkg}" "${version}" "${url}" "${file}" "${sha256}"
-            else
-                ksysroot_"${KSYSROOT_OSFLAVOUR}"_bomresource "${pkg}" "${version}" "${url}" "${file}" "${sha256}"
-            fi
-        fi
-    done < "${2:-/dev/fd/0}"
-    if [ "${KSYSROOT_TRIPLE}" = "native" ]; then
-        ksysroot_native_bomclose
+  mkdir -p "${KSYSROOT_SYSROOT}"
+  local pkg version url file sha256
+  while read -r pkg version url file sha256; do
+    1>&2 echo PKG="${pkg}" VERSION="${version}" URL="${url}" FILE="${file}" SHA256="${sha256}"
+    if [ "${pkg}" = "#" ]; then
+      # shellcheck disable=SC2046
+      export $(echo "${version}" "${url}" "${file}" "${sha256}" | ${XARGS})
     else
-        ksysroot_"${KSYSROOT_OSFLAVOUR}"_bomclose
+      if [ "${KSYSROOT_TRIPLE}" = "native" ]; then
+        ksysroot_native_bomresource "${pkg}" "${version}" "${url}" "${file}" "${sha256}"
+      else
+        ksysroot_"${KSYSROOT_OSFLAVOUR}"_bomresource "${pkg}" "${version}" "${url}" "${file}" "${sha256}"
+      fi
     fi
+  done <"${2:-/dev/fd/0}"
+  if [ "${KSYSROOT_TRIPLE}" = "native" ]; then
+    ksysroot_native_bomclose
+  else
+    ksysroot_"${KSYSROOT_OSFLAVOUR}"_bomclose
+  fi
 }

@@ -14,12 +14,43 @@ name: build
     branches:
       - main
   push:
+    branches:
+      - main
 
 permissions:
   contents: read
 
 jobs:
+  lint:
+    name: lint
+    runs-on: "ubuntu-24.04"
+
+    steps:
+      - name: install packages (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update --quiet || true
+          sudo apt-get -yq --no-install-suggests --no-install-recommends install \
+            yamllint shellcheck shfmt
+      - name: install packages (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install \
+            yamllint shellcheck shfmt
+
+      - uses: actions/checkout@v4
+        with:
+          path: src
+
+      - run: yamllint -f github .
+        working-directory: src
+      - run: shellcheck --check-sourced --format=gcc ksysroot.sh
+        working-directory: src
+      - run: shfmt --diff --indent 2 --case-indent --simplify ksysroot.sh functions*
+        working-directory: src
+
   build:
+    needs: lint
     name: build ${{ matrix.build-os-pkg }} ${{ matrix.cross }} ${{ matrix.compiler }}
     runs-on: "${{ matrix.build-os }}"
     strategy:
@@ -70,11 +101,11 @@ jobs:
             brewpkgs:
               - llvm
               - lld
-              - pkgconf # we want the brew version
+              - pkgconf     # we want the brew version
               - meson
-              - libarchive # bsdtar
+              - libarchive  # bsdtar
               - kevemueller/ksysroot/debootstrap
-          
+
           - build-os-pkg: ubuntu-24.04_apt
             build-os: ubuntu-24.04
             pkg: native
@@ -85,7 +116,7 @@ jobs:
               - lld
               # - pkgconf comes preinstalled on the GitHub runner
               - meson
-              - libarchive-tools # bsdtar
+              - libarchive-tools    # bsdtar
               - debootstrap
               # - fakeroot comes preinstalled on the GitHub runner
 
@@ -106,7 +137,7 @@ jobs:
           sudo apt-get update --quiet || true
           sudo apt-get -yq --no-install-suggests --no-install-recommends install \
             ${{ join(matrix.pkgs, ' ') }}
-      
+
       - name: install packages (Linux/brew)
         if: runner.os == 'Linux' && matrix.pkg == 'brew'
         run: |
@@ -122,11 +153,11 @@ jobs:
           echo "INST_KSYSROOT=${GITHUB_WORKSPACE}/inst.ksysroot" >> "${GITHUB_ENV}"
 
       - name: select llvm (Linux/brew)
-        if: runner.os == 'Linux' # && matrix.pkg == 'brew'
+        if: runner.os == 'Linux'    # && matrix.pkg == 'brew'
         run: |
           # echo "LLVM_DIR=$(brew --prefix llvm@18)/bin" >> "${GITHUB_ENV}"
           echo "MESON_COMPILE_ARGS=-v" >> "${GITHUB_ENV}"
-          
+
       - name: install ksysroot (install)
         run: |
           echo uname -a: $(uname -a)
@@ -139,12 +170,14 @@ jobs:
       - name: check ksysroot (install)
         run: |
           ${SRC_KSYSROOT}/ksysroot.sh test "${INST_KSYSROOT}"
- 
+
       - name: install ksysroot (bom/frombom)
         run: |
           echo SRC_KSYSROOT="${SRC_KSYSROOT}"
           echo INST_KSYSROOT="${INST_KSYSROOT}"
-          ${SRC_KSYSROOT}/ksysroot.sh bom "${{ matrix.cross }}" | tee "${GITHUB_STEP_SUMMARY}" |  ${SRC_KSYSROOT}/ksysroot.sh frombom "${INST_KSYSROOT}".bom
+          ${SRC_KSYSROOT}/ksysroot.sh bom "${{ matrix.cross }}" |
+            tee "${GITHUB_STEP_SUMMARY}" |
+            ${SRC_KSYSROOT}/ksysroot.sh frombom "${INST_KSYSROOT}".bom
 
       - name: check ksysroot (bom/frombom)
         run: |
