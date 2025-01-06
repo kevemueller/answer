@@ -1,0 +1,9 @@
+---
+# Configuration file for yamllint
+
+extends: default
+
+rules:
+  document-start: disable
+  line-length:
+    max: 108

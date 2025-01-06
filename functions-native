@@ -1,76 +1,76 @@
 # shellcheck shell=sh
 
 ksysroot_native_iterate1() {
-    echo native
+  echo native
 }
 ksysroot_native_iterate2() {
-    :
+  :
 }
 ksysroot_native_iterate3() {
-    :
+  :
 }
 ksysroot_native_iterate() {
-    ksysroot_native_iterate1
-    ksysroot_native_iterate2
-    ksysroot_native_iterate3
+  ksysroot_native_iterate1
+  ksysroot_native_iterate2
+  ksysroot_native_iterate3
 }
 
 ksysroot_native_meta() {
-    case "$(uname -s)" in
-        Darwin)
-            MESON_SYSTEM=darwin
-            : "${SW_VERS:=$(require_tool sw_vers)}"
-            KSYSROOT_OSFLAVOUR="$(${SW_VERS} --productName | tr "[:upper:]" "[:lower:]")"
-            KSYSROOT_OSRELEASE="$(${SW_VERS} --productVersion)"
-            _MESON_SUBSYSTEM="${KSYSROOT_OSFLAVOUR}"
-            ;;
-        Linux)
-            MESON_SYSTEM=linux
-            : "${LSB_RELEASE:=$(require_tool lsb_release)}"
-            KSYSROOT_OSFLAVOUR="$(${LSB_RELEASE} -si | tr "[:upper:]" "[:lower:]")"
-            KSYSROOT_OSRELEASE="$(${LSB_RELEASE} -sr)"
-            ;;
-        *)
-            MESON_SYSTEM=unknown
-            KSYSROOT_OSFLAVOUR=unknown
-            ;;
-    esac
+  case "$(uname -s)" in
+    Darwin)
+      MESON_SYSTEM=darwin
+      : "${SW_VERS:=$(require_tool sw_vers)}"
+      KSYSROOT_OSFLAVOUR="$(${SW_VERS} --productName | tr "[:upper:]" "[:lower:]")"
+      KSYSROOT_OSRELEASE="$(${SW_VERS} --productVersion)"
+      _MESON_SUBSYSTEM="${KSYSROOT_OSFLAVOUR}"
+      ;;
+    Linux)
+      MESON_SYSTEM=linux
+      : "${LSB_RELEASE:=$(require_tool lsb_release)}"
+      KSYSROOT_OSFLAVOUR="$(${LSB_RELEASE} -si | tr "[:upper:]" "[:lower:]")"
+      KSYSROOT_OSRELEASE="$(${LSB_RELEASE} -sr)"
+      ;;
+    *)
+      MESON_SYSTEM=unknown
+      KSYSROOT_OSFLAVOUR=unknown
+      ;;
+  esac
 
-    case "$(uname -m)" in
-        arm64)
-            MESON_CPUFAMILY=aarch64
-            ;;
-        x86_64)
-            MESON_CPUFAMILY=x86_64
-            ;;
-        *)
-            MESON_CPUFAMILY=unknown
-            ;;
-    esac
-    MESON_CPU=${MESON_CPUFAMILY}
-    : "${MESON_ENDIAN:=little}"
+  case "$(uname -m)" in
+    arm64)
+      MESON_CPUFAMILY=aarch64
+      ;;
+    x86_64)
+      MESON_CPUFAMILY=x86_64
+      ;;
+    *)
+      MESON_CPUFAMILY=unknown
+      ;;
+  esac
+  MESON_CPU=${MESON_CPUFAMILY}
+  : "${MESON_ENDIAN:=little}"
 
-    KSYSROOT_TRIPLE=native
-    KSYSROOT_FULL_TRIPLE="$("${LLVM_DIR}"/clang -print-target-triple)"
-    KSYSROOT_LINKER="${NATIVE_LINKER}"
-    KSYSROOT_LICENSE="BSD-2-Clause"
+  KSYSROOT_TRIPLE=native
+  KSYSROOT_FULL_TRIPLE="$("${LLVM_DIR}"/clang -print-target-triple)"
+  KSYSROOT_LINKER="${NATIVE_LINKER}"
+  KSYSROOT_LICENSE="BSD-2-Clause"
 }
 
 ksysroot_native_bom() {
-    ksysroot_native_meta
-    ksysroot_bomconstants
+  ksysroot_native_meta
+  ksysroot_bomconstants
 }
 
 ksysroot_native_bomresource() {
-    :
+  :
 }
 ksysroot_native_bomclose() {
-    ksysroot_native_meta
-    ksysroot_emit
+  ksysroot_native_meta
+  ksysroot_emit
 }
 
 ksysroot_native_install() {
-    ksysroot_prefix "${2:-ksysroot-${1:-native}}"
-    ksysroot_native_meta
-    ksysroot_emit
+  ksysroot_prefix "${2:-ksysroot-${1:-native}}"
+  ksysroot_native_meta
+  ksysroot_emit
 }
