@@ -50,4 +50,10 @@ ret=$((ret + $?))
 shfmt --diff --indent 2 --case-indent --simplify ksysroot.sh functions* githooks/*
 ret=$((ret + $?))
 
+if ! meson format -rq; then
+  ret=$((ret + 1))
+  echo There are meson formatting issues!
+  echo Try meson format -ri
+fi
+
 exit ${ret}
