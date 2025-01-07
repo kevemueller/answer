@@ -93,7 +93,15 @@ freebsd_quirks() {
 ksysroot_freebsd_meta() {
   local basetriple="${1%@*}"
   local flavour="${1#*@}"
-  FREEBSD_VERSION="${flavour#freebsd}"
+
+  if [ "${basetriple}" = "${flavour}" ]; then
+    FREEBSD_KERNEL="${basetriple##*freebsd}"
+    flavour=freebsd${FREEBSD_KERNEL:-14.2}-RELEASE
+    FREEBSD_VERSION="${flavour#freebsd}"
+  else
+    FREEBSD_VERSION="${flavour#freebsd}"
+  fi
+  FREEBSD_KERNEL="${FREEBSD_VERSION%%-*}"
 
   case "${basetriple}" in
     aarch64*)
@@ -101,68 +109,78 @@ ksysroot_freebsd_meta() {
       _FREEBSD_MACHINE_CPUARCH=aarch64
       FREEBSD_MACHINE_ARCH=aarch64
       MESON_CPUFAMILY="aarch64"
+      basetriple="aarch64-freebsd${FREEBSD_KERNEL}"
       ;;
     armv7*)
       FREEBSD_MACHINE=arm
       _FREEBSD_MACHINE_CPUARCH=arm
       FREEBSD_MACHINE_ARCH=armv7
       MESON_CPUFAMILY="arm"
+      basetriple="arm-freebsd${FREEBSD_KERNEL}"
       ;;
     i386* | i686*)
       FREEBSD_MACHINE=i386
       _FREEBSD_MACHINE_CPUARCH=i386
       FREEBSD_MACHINE_ARCH=i386
       MESON_CPUFAMILY="x86"
+      basetriple="i686-freebsd${FREEBSD_KERNEL}"
       ;;
     powerpc-*)
       FREEBSD_MACHINE=powerpc
       _FREEBSD_MACHINE_CPUARCH=powerpc
       FREEBSD_MACHINE_ARCH=powerpc
       MESON_CPUFAMILY="ppc"
+      basetriple="powerpc-freebsd${FREEBSD_KERNEL}"
       ;;
     powerpcspe-*)
       FREEBSD_MACHINE=powerpc
       _FREEBSD_MACHINE_CPUARCH=powerpc
       FREEBSD_MACHINE_ARCH=powerpcspe
       MESON_CPUFAMILY="ppc"
+      basetriple="powerpcspe-freebsd${FREEBSD_KERNEL}"
       ;;
     powerpc64-*)
       FREEBSD_MACHINE=powerpc
       _FREEBSD_MACHINE_CPUARCH=powerpc
       FREEBSD_MACHINE_ARCH=powerpc64
       MESON_CPUFAMILY="ppc64"
+      basetriple="powerpc64-freebsd${FREEBSD_KERNEL}"
       ;;
     powerpc64le-*)
       FREEBSD_MACHINE=powerpc
       _FREEBSD_MACHINE_CPUARCH=powerpc
       FREEBSD_MACHINE_ARCH=powerpc64le
       MESON_CPUFAMILY="ppc64"
+      basetriple="powerpc64le-freebsd${FREEBSD_KERNEL}"
       ;;
     riscv64-*)
       FREEBSD_MACHINE=riscv
       _FREEBSD_MACHINE_CPUARCH=riscv
       FREEBSD_MACHINE_ARCH=riscv64
       MESON_CPUFAMILY="riscv64"
+      basetriple="riscv64-freebsd${FREEBSD_KERNEL}"
       ;;
     amd64* | x86_64*)
       FREEBSD_MACHINE=amd64
       _FREEBSD_MACHINE_CPUARCH=amd64
       FREEBSD_MACHINE_ARCH=amd64
       MESON_CPUFAMILY="x86_64"
+      basetriple="x86_64-freebsd${FREEBSD_KERNEL}"
       ;;
     *)
       echo Unknown FREEBSD_MACHINE "${basetriple}"
       return 1
       ;;
   esac
+
   MESON_CPU=${MESON_CPUFAMILY}
   : "${MESON_ENDIAN:=little}"
   MESON_SYSTEM="freebsd"
 
   KSYSROOT_OSFLAVOUR="freebsd"
   KSYSROOT_OSRELEASE="${FREEBSD_VERSION}"
+  # x86_64-freebsd13.2
   KSYSROOT_TRIPLE="${basetriple}"
-  # x86_64-unknown-freebsd13.2
   KSYSROOT_FULL_TRIPLE="${basetriple}"
   KSYSROOT_LINKER="ld.lld"
   KSYSROOT_LICENSE="BSD-2-Clause"
@@ -196,7 +214,7 @@ ksysroot_freebsd_bom() {
   base_sha256=$(sed -nE 's/^base.txz[[:space:]]+([0-9a-fA-F]{64}).*/\1/p' "${manifest_file}")
 
   ksysroot_bomconstants
-  printf "# FREEBSD_VERSION=%s FREEBSD_MACHINE=%s FREEBSD_MACHINE_ARCH=%s\n" "${FREEBSD_VERSION}" "${FREEBSD_MACHINE}" "${FREEBSD_MACHINE_ARCH}"
+  printf "# FREEBSD_VERSION=%s FREEBSD_KERNEL=%s FREEBSD_MACHINE=%s FREEBSD_MACHINE_ARCH=%s\n" "${FREEBSD_VERSION}" "${FREEBSD_KERNEL}" "${FREEBSD_MACHINE}" "${FREEBSD_MACHINE_ARCH}"
   printf "%s %s %s %s %s\n" "base.txz" "${FREEBSD_VERSION}" \
     "${freebsd_base_url}/base.txz" \
     "${freebsd_cache_file_prefix}base.txz" \
