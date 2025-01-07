@@ -26,14 +26,19 @@ jobs:
       - name: install packages (Linux)
         if: runner.os == 'Linux'
         run: |
+          cat <<EOF | sudo tee /etc/apt/sources.list.d/ubuntu-$(lsb_release -cs)-proposed.list
+          # Enable Ubuntu proposed archive
+          deb http://archive.ubuntu.com/ubuntu/ $(lsb_release -cs)-proposed \
+          restricted main multiverse universe
+          EOF
           sudo apt-get update --quiet || true
           sudo apt-get -yq --no-install-suggests --no-install-recommends install \
-            yamllint shellcheck shfmt
+            meson-1.5 shellcheck shfmt yamllint
       - name: install packages (macOS)
         if: runner.os == 'macOS'
         run: |
           brew install \
-            yamllint shellcheck shfmt
+            meson shellcheck shfmt yamllint
 
       - uses: actions/checkout@v4
         with:
@@ -44,6 +49,8 @@ jobs:
       - run: shellcheck --check-sourced --format=gcc ksysroot.sh
         working-directory: src
       - run: shfmt --diff --indent 2 --case-indent --simplify ksysroot.sh functions*
+        working-directory: src
+      - run: meson format -rq
         working-directory: src
 
   build:
