@@ -224,7 +224,7 @@ ksysroot_freebsd_bomclose() {
 }
 
 ksysroot_freebsd_install() {
-  ksysroot_freebsd_bom "$1" | ksysroot_frombom "${2:-ksysroot-$1}"
+  ksysroot_freebsd_bom "$1" | ksysroot_frombom "${2:-ksysroot-$1}" "$3"
 }
 
 ksysroot_freebsd_pkgbase() {

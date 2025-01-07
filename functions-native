@@ -71,6 +71,7 @@ ksysroot_native_bomclose() {
 
 ksysroot_native_install() {
   ksysroot_prefix "${2:-ksysroot-${1:-native}}"
+  KSYSROOT_LINK_TRIPLE="$3"
   ksysroot_native_meta
   ksysroot_emit
 }
