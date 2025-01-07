@@ -79,7 +79,7 @@ ksysroot_test_pkgconf() {
   local PKG_CONFIG1 PKG_CONFIG2
   local env
 
-  env="$(echo "${ksysroot_dir}"/bin/*-env)"
+  env="$(find "${ksysroot_dir}"/bin -name "*-env" | tail -1)"
 
   echo envfile is "${env}"
   # shellcheck disable=SC2016
@@ -116,17 +116,17 @@ usage() {
   echo "Usage: $0 <command> [<args>]"
   echo
   echo "Iteration"
-  echo "    iterate                                   Iterate all known triples"
-  echo "    iterate{1|2|3}                            Iterate tier-{1|2|3} triples"
+  echo "  iterate                                               Iterate all known triples"
+  echo "  iterate{1|2|3}                                        Iterate tier-{1|2|3} triples"
   echo
   echo "Installation"
-  echo "    bom <triple>                              Emit BOM for triple"
-  echo "    frombom <target-directory> [bomfile]      Install from BOM/stdin into target-directory"
-  echo "    install <triple> <target-directory>       Install directly into target-directory"
+  echo "  bom <triple>                                          Emit BOM for triple"
+  echo "  frombom <target-directory> [bomfile] [link-triple]    Install from BOM/stdin into target-directory"
+  echo "  install <triple> <target-directory> [link-triple]     Install directly into target-directory"
   echo
   echo "Test"
-  echo "    test <directory>                          Run all tests in <directory>"
-  echo "    test_{wrapper|meson|pkgconf} <directory>  Run specific test in <directory>"
+  echo "  test <directory>                                      Run all tests in <directory>"
+  echo "  test_{wrapper|meson|pkgconf} <directory>              Run specific test in <directory>"
 }
 
 dispatch() {

@@ -359,7 +359,7 @@ work_out_debs () {
 }
 EOF
 
-  FORCE_REQUIRED="libstdc++-${DEBIAN_GCC}-dev" 1>&2 ${FAKEROOT} "${DEBOOTSTRAP}" \
+  FORCE_REQUIRED="libstdc++-${DEBIAN_GCC}-dev ${KSYSROOT_ADD_PKG}" 1>&2 ${FAKEROOT} "${DEBOOTSTRAP}" \
     "$@" --arch="${DEBIAN_ARCH}" \
     --cache-dir="${cache_dir_abs}"/debian \
     "${DEBIAN_NAME}" "${db_tmp}" \
@@ -459,6 +459,7 @@ ksysroot_debian_install() {
   : "${DEBOOTSTRAP:=$(require_tool debootstrap /usr/local/sbin /usr/sbin)}"
 
   ksysroot_prefix "${2:-ksysroot-$1}"
+  KSYSROOT_LINK_TRIPLE="$3"
 
   local db_tmp
 

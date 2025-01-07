@@ -127,41 +127,50 @@ fix_abs_link() {
 # environment definition for legacy tooling
 # we use the wrappers
 emit_meta_env() {
+  local wrapname="$1"
+  local sysroot=
+
+  if [ "${KSYSROOT_TRIPLE}" != "native" ]; then
+    sysroot="KSYSROOT_SYSROOT=\"${KSYSROOT_SYSROOT}\""
+  fi
+
   cat <<EOF
 #!/bin/sh
 if [ \$# -ne 0 ]; then
   set -a
 fi
 
-KSYSROOT_SYSROOT="${KSYSROOT_SYSROOT}"
+KSYSROOT_PREFIX="${KSYSROOT_PREFIX_ABS}"
 KSYSROOT_TRIPLE="${KSYSROOT_TRIPLE}"
 KSYSROOT_FULL_TRIPLE="${KSYSROOT_FULL_TRIPLE}"
+${sysroot}
 
-LLVM_DIR="${LLVM_DIR}"
+LLVM_BINDIR="${LLVM_DIR}"
+LLD_BINDIR="${LLD_DIR}"
 
-LLVM_CONFIG=\${LLVM_DIR}/llvm-config
-PKG_CONFIG=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-pkg-config
-PKG_CONFIG_FOR_BUILD=${PKG_CONFIG}/bin/pkg-config
+LLVM_CONFIG=\${LLVM_BINDIR}/llvm-config
+PKG_CONFIG=\${KSYSROOT_PREFIX}/bin/${wrapname}-pkg-config
+PKG_CONFIG_FOR_BUILD=${PKG_CONFIG}
 
-CC=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-cc
-CC_FOR_BUILD=\${LLVM_DIR}/clang
-CXX=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-c++
-CXX_FOR_BUILD=\${LLVM_DIR}/clang++
-CPP=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-cpp
-CPP_FOR_BUILD=\${LLVM_DIR}/clang-cpp
-LD=${KSYSROOT_PREFIX_ABS}/bin/\${KSYSROOT_FULL_TRIPLE}-ld
-LD_FOR_BUILD=${LLD_DIR}/${NATIVE_LINKER}
+CC=\${KSYSROOT_PREFIX}/bin/${wrapname}-cc
+CC_FOR_BUILD=\${LLVM_BINDIR}/clang
+CXX=\${KSYSROOT_PREFIX}/bin/${wrapname}-c++
+CXX_FOR_BUILD=\${LLVM_BINDIR}/clang++
+CPP=\${KSYSROOT_PREFIX}/bin/${wrapname}-cpp
+CPP_FOR_BUILD=\${LLVM_BINDIR}/clang-cpp
+LD=\${KSYSROOT_PREFIX}/bin/${wrapname}-ld
+LD_FOR_BUILD=\${LLD_BINDIR}/${NATIVE_LINKER}
 
-AR=\${LLVM_DIR}/llvm-ar
-AS=\${LLVM_DIR}/llvm-as
-NM=\${LLVM_DIR}/llvm-nm
-OBJCOPY=\${LLVM_DIR}/llvm-objcopy
-OBJDUMP=\${LLVM_DIR}/llvm-objdump
-RANLIB=\${LLVM_DIR}/llvm-ranlib
-READELF=\${LLVM_DIR}/llvm-readelf
-SIZE=\${LLVM_DIR}/llvm-size
-STRINGS=\${LLVM_DIR}/llvm-strings
-STRIP=\${LLVM_DIR}/llvm-strip
+AR=\${LLVM_BINDIR}/llvm-ar
+AS=\${LLVM_BINDIR}/llvm-as
+NM=\${LLVM_BINDIR}/llvm-nm
+OBJCOPY=\${LLVM_BINDIR}/llvm-objcopy
+OBJDUMP=\${LLVM_BINDIR}/llvm-objdump
+RANLIB=\${LLVM_BINDIR}/llvm-ranlib
+READELF=\${LLVM_BINDIR}/llvm-readelf
+SIZE=\${LLVM_BINDIR}/llvm-size
+STRINGS=\${LLVM_BINDIR}/llvm-strings
+STRIP=\${LLVM_BINDIR}/llvm-strip
 
 if [ \$# -ne 0 ]; then
   exec "\$@"
@@ -191,7 +200,8 @@ EOF
 # useful Meson constants:
 #   sysroot -- our sysroot
 #   triple  -- our triple
-#   llvm_dir_${name} - directory to llvm
+#   llvm_bindir_${name} - directory to llvm binaries
+#   lld_bindir_${name} - directory to lld binaries
 # With Meson we don't need to use the wrappers!
 emit_meta_llvm() {
   local name="$1"
@@ -202,36 +212,39 @@ emit_meta_llvm() {
   if [ "${name}" = "native" ]; then
     pkg_config="'${PKG_CONFIG}'"
     ld="${NATIVE_LINKER}"
+    ksysroot_dir=
   else
     pkg_config="ksysroot_dir_${name} / 'bin' / triple + '-pkg-config'"
     ld="${KSYSROOT_LINKER}"
+    ksysroot_dir="ksysroot_dir_${name} = '${KSYSROOT_PREFIX_ABS}'"
   fi
 
   cat <<EOF
 [binaries]
-llvm-config = llvm_dir_${name} / 'llvm-config'
+llvm-config = llvm_bindir_${name} / 'llvm-config'
 pkg-config = ${pkg_config}
 
-c = llvm_dir_${name} / 'clang'
-c_ld = '${LLD_DIR}' / '${ld}'
-cpp = llvm_dir_${name} / 'clang++'
-cpp_ld = '${LLD_DIR}' / '${ld}'
+c = llvm_bindir_${name} / 'clang'
+c_ld = lld_bindir_${name} / '${ld}'
+cpp = llvm_bindir_${name} / 'clang++'
+cpp_ld = lld_bindir_${name} / '${ld}'
 
-ar = llvm_dir_${name} / 'llvm-ar'
-as = llvm_dir_${name} / 'llvm-as'
-ld = '${LLD_DIR}' / '${ld}'
-nm = llvm_dir_${name} / 'llvm-nm'
-objcopy = llvm_dir_${name} / 'llvm-objcopy'
-objdump = llvm_dir_${name} / 'llvm-objdump'
-ranlib = llvm_dir_${name} / 'llvm-ranlib'
-readelf = llvm_dir_${name} / 'llvm-readelf'
-size = llvm_dir_${name} / 'llvm-size'
-strings = llvm_dir_${name} / 'llvm-strings'
-strip = llvm_dir_${name} / 'llvm-strip'
+ar = llvm_bindir_${name} / 'llvm-ar'
+as = llvm_bindir_${name} / 'llvm-as'
+ld = lld_bindir_${name} / '${ld}'
+nm = llvm_bindir_${name} / 'llvm-nm'
+objcopy = llvm_bindir_${name} / 'llvm-objcopy'
+objdump = llvm_bindir_${name} / 'llvm-objdump'
+ranlib = llvm_bindir_${name} / 'llvm-ranlib'
+readelf = llvm_bindir_${name} / 'llvm-readelf'
+size = llvm_bindir_${name} / 'llvm-size'
+strings = llvm_bindir_${name} / 'llvm-strings'
+strip = llvm_bindir_${name} / 'llvm-strip'
 
 [constants]
-llvm_dir_${name} = '${LLVM_DIR}'
-ksysroot_dir_${name} = '${KSYSROOT_PREFIX_ABS}'
+llvm_bindir_${name} = '${LLVM_DIR}'
+lld_bindir_${name} = '${LLD_DIR}'
+${ksysroot_dir}
 EOF
 }
 
@@ -283,13 +296,17 @@ EOF
 
 # create wrappers for legacy uses
 mk_wrappers() {
-  mkdir -p "${KSYSROOT_PREFIX_ABS}"/bin
+  local wrapname
   local sysroot_args=
   local common_args="${KSYSROOT_COMMON_QUIRK_ARGS_WRAP}"
   local pkgconf_args=
   local useld_args=
 
-  if [ "${KSYSROOT_TRIPLE}" != "native" ]; then
+  mkdir -p "${KSYSROOT_PREFIX_ABS}"/bin
+  if [ "${KSYSROOT_TRIPLE}" = "native" ]; then
+    wrapname="native"
+  else
+    wrapname="${KSYSROOT_FULL_TRIPLE}"
     # shellcheck disable=SC2089
     sysroot_args="--sysroot=\"${KSYSROOT_SYSROOT}\""
     common_args="-target ${KSYSROOT_FULL_TRIPLE} ${sysroot_args} ${common_args}"
@@ -303,25 +320,22 @@ mk_wrappers() {
   local _llvm_tools="ar as nm objcopy objdump ranlib readelf size strings strip"
 
   # shellcheck disable=SC2086 disable=SC2090
-  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-pkg-config" "${PKG_CONFIG}" ${pkgconf_args}
+  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${wrapname}-pkg-config" "${PKG_CONFIG}" ${pkgconf_args}
   # shellcheck disable=SC2086 disable=SC2090
-  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cc" "${LLVM_DIR}"/clang ${common_args} ${useld_args}
+  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${wrapname}-cc" "${LLVM_DIR}"/clang ${common_args} ${useld_args}
   # shellcheck disable=SC2086 disable=SC2090
-  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-c++" "${LLVM_DIR}"/clang++ ${common_args} ${KSYSROOT_CPP_QUIRK_ARGS_WRAP} ${useld_args}
+  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${wrapname}-c++" "${LLVM_DIR}"/clang++ ${common_args} ${KSYSROOT_CPP_QUIRK_ARGS_WRAP} ${useld_args}
   # shellcheck disable=SC2086 disable=SC2090
-  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-cpp" "${LLVM_DIR}"/clang-cpp ${common_args}
+  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${wrapname}-cpp" "${LLVM_DIR}"/clang-cpp ${common_args}
   # shellcheck disable=SC2086 disable=SC2090
-  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-ld" "${LLD_DIR}/${KSYSROOT_LINKER}" ${sysroot_args}
+  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${wrapname}-ld" "${LLD_DIR}/${KSYSROOT_LINKER}" ${sysroot_args}
 
-  # do not create unnecessary wrappers
-  # for i in ${llvm_tools}; do
-  #     # shellcheck disable=SC2086
-  #     mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_FULL_TRIPLE}-$i" "${LLVM_DIR}"/llvm-"$i"
-  # done
+  emit_meta_env "${wrapname}" >"${KSYSROOT_PREFIX_ABS}"/bin/"${wrapname}"-env
+  chmod +x "${KSYSROOT_PREFIX_ABS}"/bin/"${wrapname}"-env
 
-  if [ "${KSYSROOT_TRIPLE}" != "${KSYSROOT_FULL_TRIPLE}" ]; then
-    for i in pkg-config ${clang_tools} ld; do
-      mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_TRIPLE}-$i" "${KSYSROOT_FULL_TRIPLE}-$i"
+  if [ "${KSYSROOT_LINK_TRIPLE}" ]; then
+    for i in env pkg-config ${clang_tools} ld; do
+      mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${KSYSROOT_LINK_TRIPLE}-$i" "${wrapname}-$i"
     done
   fi
 }
@@ -339,8 +353,6 @@ ksysroot_prefix() {
 # $@ - pkg-config-paths
 ksysroot_emit() {
   mk_wrappers
-  emit_meta_env >"${KSYSROOT_PREFIX_ABS}"/bin/"${KSYSROOT_FULL_TRIPLE}"-env
-  chmod +x "${KSYSROOT_PREFIX_ABS}"/bin/"${KSYSROOT_FULL_TRIPLE}"-env
   emit_meta_llvm native >"${KSYSROOT_PREFIX}"/native.txt
   if [ "${KSYSROOT_TRIPLE}" != "native" ]; then
     local libpath="$1"
@@ -361,7 +373,11 @@ ksysroot_bomconstants() {
 
 # $1 - tgtprefix
 # $2 - optional file, stdin if empty
+# $3 - optional link-triple
 ksysroot_frombom() {
+
+  KSYSROOT_LINK_TRIPLE="$3"
+
   ksysroot_prefix "$1"
 
   mkdir -p "${KSYSROOT_SYSROOT}"
