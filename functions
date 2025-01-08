@@ -1,6 +1,9 @@
 # shellcheck shell=sh
 set -e
 
+# constants
+COMMON_TIER1="aarch64 x86_64"
+
 ### tools
 
 # $1 tool
@@ -31,6 +34,7 @@ require_tool() {
 : "${FIND:=$(require_tool find)}"
 : "${READLINK:=$(require_tool readlink)}"
 : "${SHA256SUM:=$(require_tool sha256sum)}"
+: "${SHA512SUM:=$(require_tool sha512sum)}"
 : "${XARGS:=$(require_tool xargs)}"
 
 quote_snippet() {
@@ -75,7 +79,16 @@ EOF
 # $1 - checksum
 # $2 - file
 shacheck() {
-  echo "$1 $2" | ${SHA256SUM} --check - --status
+  local alg
+  case "${#1}" in
+    64) alg="${SHA256SUM}" ;;
+    128) alg="${SHA512SUM}" ;;
+    *)
+      1>&2 echo Unknown SHA length "${#1}" for checksum "$1" of file "$2"
+      return 1
+      ;;
+  esac
+  echo "$1 $2" | "${alg}" --strict --status --check -
 }
 # $1 - file
 shacompute() {
@@ -100,7 +113,7 @@ cache() {
     --location --remote-time \
     -o "${cache_file}" "${url}"
   if [ "${sha256}" ] && ! shacheck "${sha256}" "${cache_file}"; then
-    2>&1 Freshly downloaded "${url}" does not match expected SHA-256 "${sha256}", removing it.
+    1>&2 echo Freshly downloaded "${url}" does not match expected SHA-256 "${sha256}", removing it.
     rm "${cache_file}"
     echo /dev/null
     return 1
@@ -274,6 +287,7 @@ sysroot = '${KSYSROOT_SYSROOT}'
 common_quirk_args = [${KSYSROOT_COMMON_QUIRK_ARGS_MESON}]
 common_args = ['-target', triple, '--sysroot=' + sysroot] + common_quirk_args
 cpp_quirk_args = [${KSYSROOT_CPP_QUIRK_ARGS_MESON}]
+cpp_link_quirk_args = [${KSYSROOT_CPP_LINK_QUIRK_ARGS_MESON}]
 
 [properties]
 needs_exe_wrapper = true
@@ -289,7 +303,7 @@ endian = '${MESON_ENDIAN}'
 c_args = common_args
 cpp_args = common_args + cpp_quirk_args
 c_link_args = common_args
-cpp_link_args = common_args
+cpp_link_args = common_args + cpp_link_quirk_args
 pkg_config_path = ${pkgconfig_paths}
 EOF
 }
@@ -328,7 +342,7 @@ mk_wrappers() {
   # shellcheck disable=SC2086 disable=SC2090
   mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${wrapname}-cpp" "${LLVM_DIR}"/clang-cpp ${common_args}
   # shellcheck disable=SC2086 disable=SC2090
-  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${wrapname}-ld" "${LLD_DIR}/${KSYSROOT_LINKER}" ${sysroot_args}
+  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${wrapname}-ld" "${LLD_DIR}/${KSYSROOT_LINKER}" ${sysroot_args} ${KSYSROOT_CPP_LINK_QUIRK_ARGS_WRAP}
 
   emit_meta_env "${wrapname}" >"${KSYSROOT_PREFIX_ABS}"/bin/"${wrapname}"-env
   chmod +x "${KSYSROOT_PREFIX_ABS}"/bin/"${wrapname}"-env

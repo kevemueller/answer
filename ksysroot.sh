@@ -32,6 +32,7 @@ fi
 . "${KSYSROOT_PREFIX}"/functions-native
 . "${KSYSROOT_PREFIX}"/functions-debian
 . "${KSYSROOT_PREFIX}"/functions-freebsd
+. "${KSYSROOT_PREFIX}"/functions-netbsd
 
 ksysroot_test_wrapper() {
   local ksysroot_dir="$1"
@@ -134,17 +135,24 @@ dispatch() {
       ksysroot_frombom "$@"
       ;;
     iterate*)
-      ksysroot_native_"${cmd}"
-      ksysroot_debian_"${cmd}"
-      ksysroot_freebsd_"${cmd}"
+      local filter="${1:-.}"
+      {
+        ksysroot_native_"${cmd}"
+        ksysroot_debian_"${cmd}"
+        ksysroot_freebsd_"${cmd}"
+        ksysroot_netbsd_"${cmd}"
+      } | grep -iE "${filter}"
       ;;
     *)
       case "$1" in
         *linux*-gnu | *@debian*)
           ksysroot_debian_"${cmd}" "$@"
           ;;
-        *freebsd*)
+        *freebsd* | *FreeBSD*)
           ksysroot_freebsd_"${cmd}" "$@"
+          ;;
+        *netbsd* | *NetBSD*)
+          ksysroot_NetBSD_"${cmd}" "$@"
           ;;
         native)
           ksysroot_native_"${cmd}" "$@"

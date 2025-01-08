@@ -1,0 +1,166 @@
+# shellcheck shell=sh
+set -e
+
+NETBSD_TIER2=""
+NETBSD_TIER3=""
+
+NETBSD_PRODUCTION1="10.1"
+NETBSD_PRODUCTION2="10.0"
+NETBSD_SNAP=""
+
+netbsd_flavour() {
+  printf "%s-netbsd%s@NetBSD-%s\n" "$1" "$2" "$2"
+}
+
+# NetBSD Tier 1 platforms on most recent supported Release
+ksysroot_NetBSD_iterate1() {
+  local arch_type version
+
+  for arch_type in ${COMMON_TIER1}; do
+    for version in ${NETBSD_PRODUCTION1}; do
+      netbsd_flavour "${arch_type}" "${version}"
+    done
+  done
+}
+
+# NetBSD Tier 1 platforms on legacy supported Releases + snapshots
+# NetBSD Tier 2 platforms on most recent supported Releases
+ksysroot_NetBSD_iterate2() {
+  local arch_type version
+
+  for arch_type in ${COMMON_TIER1}; do
+    for version in ${NETBSD_PRODUCTION2} ${NETBSD_SNAP}; do
+      netbsd_flavour "${arch_type}" "${version}"
+    done
+  done
+  for arch_type in ${NETBSD_TIER2}; do
+    for version in ${NETBSD_PRODUCTION1}; do
+      netbsd_flavour "${arch_type}" "${version}"
+    done
+  done
+}
+
+# NetBSD Tier 2 platforms on legacy supported Releases + snapshots
+# NetBSD Tier 3 platforms on most recent supported Releases
+ksysroot_NetBSD_iterate3() {
+  local arch_type version
+
+  for arch_type in ${NETBSD_TIER2}; do
+    for version in ${NETBSD_PRODUCTION2} ${NETBSD_SNAP}; do
+      netbsd_flavour "${arch_type}" "${version}"
+    done
+  done
+  for arch_type in ${NETBSD_TIER3}; do
+    for version in ${NETBSD_PRODUCTION1}; do
+      netbsd_flavour "${arch_type}" "${version}"
+    done
+  done
+}
+
+ksysroot_NetBSD_iterate() {
+  ksysroot_NetBSD_iterate1
+  ksysroot_NetBSD_iterate2
+  ksysroot_NetBSD_iterate3
+}
+
+netbsd_quirks() {
+  KSYSROOT_CPP_QUIRK_ARGS_WRAP="-stdlib=libstdc++"
+  KSYSROOT_CPP_QUIRK_ARGS_MESON="'${KSYSROOT_CPP_QUIRK_ARGS_WRAP}'"
+  KSYSROOT_CPP_LINK_QUIRK_ARGS_WRAP="${KSYSROOT_CPP_QUIRK_ARGS_WRAP}"
+  KSYSROOT_CPP_LINK_QUIRK_ARGS_MESON="${KSYSROOT_CPP_QUIRK_ARGS_MESON}"
+}
+
+# $1 - flavoured base triple
+ksysroot_NetBSD_meta() {
+  local basetriple="${1%@*}"
+  local flavour="${1#*@}"
+
+  if [ "${basetriple}" = "${flavour}" ]; then
+    NETBSD_KERNEL="${basetriple##*netbsd}"
+    flavour=NetBSD-${NETBSD_KERNEL:-10.1}
+  fi
+  NETBSD_VERSION="${flavour#NetBSD-}"
+  NETBSD_KERNEL="${NETBSD_VERSION%%-*}"
+
+  case "${basetriple}" in
+    aarch64*)
+      NETBSD_PORT=evbarm-aarch64
+      MESON_CPUFAMILY="aarch64"
+      basetriple="aarch64-netbsd${NETBSD_KERNEL}"
+      ;;
+    amd64* | x86_64*)
+      NETBSD_PORT=amd64
+      MESON_CPUFAMILY="x86_64"
+      basetriple="x86_64-netbsd${NETBSD_KERNEL}"
+      ;;
+    *)
+      echo Unknown NETBSD_PORT "${basetriple}"
+      return 1
+      ;;
+  esac
+
+  MESON_CPU=${MESON_CPUFAMILY}
+  : "${MESON_ENDIAN:=little}"
+  MESON_SYSTEM="netbsd"
+
+  KSYSROOT_OSFLAVOUR="NetBSD"
+  KSYSROOT_OSRELEASE="${NETBSD_VERSION}"
+  KSYSROOT_TRIPLE="${basetriple}"
+  KSYSROOT_FULL_TRIPLE="${basetriple}"
+  KSYSROOT_LINKER="ld.lld"
+  KSYSROOT_LICENSE="BSD-4-Clause-UC"
+}
+
+# $1 - flavoured base triple
+# emits the URLs that are required to build the sysroot
+ksysroot_NetBSD_bom() {
+  ksysroot_NetBSD_meta "$1"
+
+  local netbsd_base_url
+  local netbsd_cache_file_prefix
+  local manifest_file
+
+  netbsd_base_url="https://cdn.netbsd.org/pub/${KSYSROOT_OSFLAVOUR}"
+  sets_dir="${KSYSROOT_OSFLAVOUR}-${KSYSROOT_OSRELEASE}/${NETBSD_PORT}/binary/sets"
+  netbsd_cache_file_prefix="NetBSD/${NETBSD_PORT}_${NETBSD_VERSION}-"
+
+  manifest_url="https://cdn.netbsd.org/pub/NetBSD/security/hashes/${KSYSROOT_OSFLAVOUR}-${KSYSROOT_OSRELEASE}_hashes.asc"
+  manifest_file=$(cache "${manifest_url}" "NetBSD/${NETBSD_VERSION}-hashes")
+
+  ksysroot_bomconstants
+  printf "# NETBSD_VERSION=%s NETBSD_KERNEL=%s NETBSD_PORT=%s\n" "${NETBSD_VERSION}" "${NETBSD_KERNEL}" "${NETBSD_PORT}"
+
+  local ball_sha512
+  for ball in base comp; do
+    ball_sha512=$(sed -nE "s%^SHA512 \(${sets_dir}/${ball}.tar.xz\)[[:space:]]*=[[:space:]]*([0-9a-fA-F]{128}).*%\1%p" "${manifest_file}")
+
+    printf "%s %s %s %s %s\n" "${ball}.tar.xz" "${NETBSD_VERSION}" \
+      "${netbsd_base_url}/${sets_dir}/${ball}.tar.xz" \
+      "${netbsd_cache_file_prefix}${ball}.tar.xz" \
+      "${ball_sha512}"
+  done
+}
+
+ksysroot_NetBSD_bomresource() {
+  local _pkg="$1"
+  local version="$2"
+  local url="$3"
+  local file="$4"
+  local sha512="$5"
+
+  local resource_file
+  resource_file="$(cache "${url}" "${file}" "${sha512}")"
+  ${TAR} -C "${KSYSROOT_SYSROOT}" -xf "${resource_file}" ./lib ./usr/lib ./usr/include || true
+}
+
+ksysroot_NetBSD_bomclose() {
+  # Brew removes empty directories, keep them
+  ${FIND} "${KSYSROOT_SYSROOT}" -type d -empty | ${XARGS} -I'{}' touch '{}'/.empty
+  fix_abs_link "${KSYSROOT_SYSROOT}"
+  netbsd_quirks
+  ksysroot_emit /usr/lib /usr/no-pkg-config
+}
+
+ksysroot_NetBSD_install() {
+  ksysroot_NetBSD_bom "$1" | ksysroot_frombom "${2:-ksysroot-$1}" "$3"
+}

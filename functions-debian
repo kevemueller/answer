@@ -12,7 +12,6 @@ undeb() {
   ${BSDTAR} -Oxzf "${debfile}" data.tar.xz | ${BSDTAR} -z "$@"
 }
 
-DEBIAN_TIER1="aarch64 x86_64"
 DEBIAN_TIER2="i586 mips64el powerpc64le"
 DEBIAN_TIER3="armel armhf mipsel s390x"
 
@@ -45,7 +44,7 @@ debian_flavour() {
 ksysroot_debian_iterate1() {
   local arch_type version
 
-  for arch_type in ${DEBIAN_TIER1}; do
+  for arch_type in ${COMMON_TIER1}; do
     for version in ${DEBIAN_PRODUCTION1}; do
       debian_flavour "${arch_type}" "${version}"
     done
@@ -57,7 +56,7 @@ ksysroot_debian_iterate1() {
 ksysroot_debian_iterate2() {
   local arch_type version
 
-  for arch_type in ${DEBIAN_TIER1}; do
+  for arch_type in ${COMMON_TIER1}; do
     for version in ${DEBIAN_PRODUCTION2}; do
       debian_flavour "${arch_type}" "${version}"
     done
