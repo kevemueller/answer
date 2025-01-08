@@ -8,7 +8,6 @@ set -e
 #   aarch64-freebsd14.2@freebsd14.2-RELEASE
 #   x86_64-freebsd14.2@freebsd14.2-RELEASE
 
-FREEBSD_TIER1="aarch64 x86_64"
 FREEBSD_TIER2="i686 powerpc powerpcspe powerpc64 powerpc64le riscv64" # armv7 has no base.txz
 FREEBSD_TIER3=""                                                      # armv6 has no base.txz
 
@@ -25,7 +24,7 @@ freebsd_flavour() {
 ksysroot_freebsd_iterate1() {
   local arch_type version
 
-  for arch_type in ${FREEBSD_TIER1}; do
+  for arch_type in ${COMMON_TIER1}; do
     for version in ${FREEBSD_PRODUCTION1}; do
       freebsd_flavour "${arch_type}" "${version}"
     done
@@ -37,7 +36,7 @@ ksysroot_freebsd_iterate1() {
 ksysroot_freebsd_iterate2() {
   local arch_type version
 
-  for arch_type in ${FREEBSD_TIER1}; do
+  for arch_type in ${COMMON_TIER1}; do
     for version in ${FREEBSD_PRODUCTION2} ${FREEBSD_SNAP}; do
       freebsd_flavour "${arch_type}" "${version}"
     done

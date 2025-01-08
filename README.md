@@ -178,6 +178,18 @@ Other architectures and Debian versions _may_ work as well.
 FreeBSD comes with a rich set of userland libraries which are embedded in the sysroot.
 Using FreeBSD `pkg` to download additional packages or using a pkgbase environment is being evaluated.
 
+## NetBSD
+`ksysroot` uses `base.tar.xz` and `comp.tar.xz` directly from the NetBSD content delivery system to download the files comprising the build. It has support for the current versions of NetBSD on a few released architectures, namely
+
+| Triple                    | NetBSD Port          |
+| ------------------------- | -------------------- |
+| aarch64-netbsd10.1        | evbarm-aarch64       |
+| aarch64-netbsd10.0        | evbarm-aarch64       |
+| x86_64-netbsd10.1         | amd64                |
+| x86_64-netbsd10.0         | amd64                |
+
+Additional ports can be trivially added.
+
 ## Native
 The special `native` triple will create the wrappers that are consistent with the cross target wrappers, but are targeting the build system natively. This is a convenient way to ensure that the same compiler toolchain is used for both native builds as well as cross builds.
 
