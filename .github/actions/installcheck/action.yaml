@@ -1,0 +1,72 @@
+name: Install&Check a single triple
+description: Setup environment, install and check a single triple.
+inputs:
+  triple:
+    required: true
+    description: The triple that should be tested
+  pkgmode:
+    required: true
+    description: Which package manager to use native/brew
+  doublecheck:
+    required: true
+    description: Also check again with plain install instead of bom/frombom
+
+runs:
+  using: composite
+  steps:
+    - name: install brew packages (macOS)
+      if: runner.os == 'macOS'
+      shell: sh
+      run: |
+        brew update --quiet || true
+        brew install llvm lld meson kevemueller/ksysroot/debootstrap
+        # pkgconf comes preinstalled on the GitHub runner
+
+    - name: install apt packages (Linux/native)
+      if: (runner.os == 'Linux') && (inputs.pkgmode == 'native')
+      shell: sh
+      run: |
+        sudo apt-get update --quiet || true
+        # pkgconf comes preinstalled on the GitHub runner
+        # fakeroot comes preinstalled on the GitHub runner
+        sudo apt-get -yq --no-install-suggests --no-install-recommends install \
+          build-essential llvm lld meson libarchive-tools debootstrap
+
+    - name: Set up Homebrew (Linux/brew)
+      if: (runner.os == 'Linux') && (inputs.pkgmode == 'brew')
+      uses: Homebrew/actions/setup-homebrew@master
+
+    - name: install apt/brew packages (Linux/brew)
+      if: (runner.os == 'Linux') && (inputs.pkgmode == 'brew')
+      shell: sh
+      run: |
+        sudo apt-get update --quiet || true
+        sudo apt-get -yq --no-install-suggests --no-install-recommends install \
+          build-essential
+
+        # we want the brew version of pkgconf
+        brew install llvm lld pkgconf meson libarchive kevemueller/ksysroot/debootstrap
+
+    - name: install ksysroot (bom/frombom)
+      shell: sh
+      run: |
+        ./ksysroot.sh bom "${{ inputs.triple }}" |
+          tee "${GITHUB_STEP_SUMMARY}" |
+          ./ksysroot.sh frombom inst.bom
+
+    - name: check ksysroot (bom/frombom)
+      shell: sh
+      run: |
+        ./ksysroot.sh test inst.bom
+
+    - name: install ksysroot (install)
+      if: contains(inputs.triple, 'Debian') && inputs.doublecheck
+      shell: sh
+      run: |
+        ./ksysroot.sh install "${{ inputs.triple }}" inst.install
+
+    - name: check ksysroot (install)
+      if: contains(inputs.triple, 'Debian') && inputs.doublecheck
+      shell: sh
+      run: |
+        ./ksysroot.sh test inst.install

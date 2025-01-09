@@ -1,0 +1,26 @@
+name: Iterate over triples
+description: Iterates triples matching given input level
+inputs:
+  tier:
+    required: true
+    description: The tier that should be iterated
+outputs:
+  triples_list:
+    description: List of triples in the given tier
+    value: ${{ steps.iterate.outputs.triples_list }}
+
+runs:
+  using: composite
+  steps:
+    - id: iterate
+      name: Iterate Tier-{{ inputs.tier }}
+      run: |
+        triples=$(./ksysroot.sh iterate${{ inputs.tier }} | tee triples.txt | jq -cRn '[inputs]')
+        echo Iteration result
+        cat triples.txt
+        echo in JSON
+        echo "${triples}"
+        printf "triples_list=%s" "${triples}" >> "${GITHUB_OUTPUT}"
+        echo in OUTPUT
+        cat "${GITHUB_OUTPUT}"
+      shell: sh
