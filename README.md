@@ -190,6 +190,15 @@ Using FreeBSD `pkg` to download additional packages or using a pkgbase environme
 
 Additional ports can be trivially added.
 
+## DragonFlyBSD
+`ksysroot` uses `dfly-x86_64-<version>_REL.iso.bz2` directly from the DragonFlyBSD content delivery system to download the files comprising the build. It has support for the current version of DragonFlyBSD on a single supported architecture, namely
+
+| Triple                    | DragonFlyBSD arch    |
+| ------------------------- | -------------------- |
+| x86_64-dragonflybsd6.4    | x86_64               |
+
+Support for _LATEST_ can be trivially added.
+
 ## Native
 The special `native` triple will create the wrappers that are consistent with the cross target wrappers, but are targeting the build system natively. This is a convenient way to ensure that the same compiler toolchain is used for both native builds as well as cross builds.
 
