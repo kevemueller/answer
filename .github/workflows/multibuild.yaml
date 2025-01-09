@@ -12,11 +12,6 @@ name: multi-tiered build
   pull_request:
     branches:
       - main
-  workflow_dispatch:
-    inputs:
-      tier:
-        description: "Tier"
-        default: 1
 
 permissions:
   contents: read

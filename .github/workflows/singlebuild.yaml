@@ -1,0 +1,56 @@
+##
+# Copyright (c) 2024 Keve Müller <kevemueller@users.github.com>
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
+# GitHub action to perform a single build.
+
+name: single build
+
+"on":
+  workflow_dispatch:
+    inputs:
+      triple:
+        description: "Triple"
+        default: aarch64-linux-gnu
+
+permissions:
+  contents: read
+
+jobs:
+  build1:
+    name: ${{ matrix.build-os-pkg }} ${{ matrix.cross }}
+    runs-on: "${{ matrix.build-os }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        build-os-pkg:
+          - macos-15
+          - macos-13
+          - ubuntu-24.04_brew
+          - ubuntu-24.04_apt
+        cross:
+          - ${{ inputs.triple }}
+        include:
+          - build-os-pkg: macos-15
+            build-os: macos-15
+            pkgmode: native
+          - build-os-pkg: macos-13
+            build-os: macos-13
+            pkgmode: native
+          - build-os-pkg: ubuntu-24.04_brew
+            build-os: ubuntu-24.04
+            pkgmode: brew
+          - build-os-pkg: ubuntu-24.04_apt
+            build-os: ubuntu-24.04
+            pkgmode: native
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: build ${{ matrix.cross }}
+        uses: ./.github/actions/installcheck
+        with:
+          triple: ${{ matrix.cross }}
+          pkgmode: ${{ matrix.pkgmode }}
+          doublecheck: true
