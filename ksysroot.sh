@@ -30,9 +30,10 @@ fi
 : "${CACHE_DIR:=cache}"
 
 . "${KSYSROOT_PREFIX}"/functions-native
-. "${KSYSROOT_PREFIX}"/functions-debian
-. "${KSYSROOT_PREFIX}"/functions-freebsd
-. "${KSYSROOT_PREFIX}"/functions-netbsd
+. "${KSYSROOT_PREFIX}"/functions-Debian
+. "${KSYSROOT_PREFIX}"/functions-DragonFlyBSD
+. "${KSYSROOT_PREFIX}"/functions-FreeBSD
+. "${KSYSROOT_PREFIX}"/functions-NetBSD
 
 ksysroot_test_wrapper() {
   local ksysroot_dir="$1"
@@ -138,18 +139,22 @@ dispatch() {
       local filter="${1:-.}"
       {
         ksysroot_native_"${cmd}"
-        ksysroot_debian_"${cmd}"
-        ksysroot_freebsd_"${cmd}"
-        ksysroot_netbsd_"${cmd}"
+        ksysroot_Debian_"${cmd}"
+        ksysroot_DragonFlyBSD_"${cmd}"
+        ksysroot_FreeBSD_"${cmd}"
+        ksysroot_NetBSD_"${cmd}"
       } | grep -iE "${filter}"
       ;;
     *)
       case "$1" in
-        *linux*-gnu | *@debian*)
-          ksysroot_debian_"${cmd}" "$@"
+        *linux*-gnu | *@Debian*)
+          ksysroot_Debian_"${cmd}" "$@"
           ;;
         *freebsd* | *FreeBSD*)
-          ksysroot_freebsd_"${cmd}" "$@"
+          ksysroot_FreeBSD_"${cmd}" "$@"
+          ;;
+        *dragonflybsd* | *DragonFlyBSD*)
+          ksysroot_DragonFlyBSD_"${cmd}" "$@"
           ;;
         *netbsd* | *NetBSD*)
           ksysroot_NetBSD_"${cmd}" "$@"

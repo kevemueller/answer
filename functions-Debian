@@ -37,11 +37,11 @@ debian_flavour() {
       abi=gnu
       ;;
   esac
-  printf "%s-linux-%s@debian%s\n" "${arch}" "${abi}" "$2"
+  printf "%s-linux-%s@Debian%s\n" "${arch}" "${abi}" "$2"
 }
 
 # Debian Tier 1 platforms on stable
-ksysroot_debian_iterate1() {
+ksysroot_Debian_iterate1() {
   local arch_type version
 
   for arch_type in ${COMMON_TIER1}; do
@@ -53,7 +53,7 @@ ksysroot_debian_iterate1() {
 
 # Debian Tier 1 platforms on testing
 # Debian Tier 2 platforms on stable
-ksysroot_debian_iterate2() {
+ksysroot_Debian_iterate2() {
   local arch_type version
 
   for arch_type in ${COMMON_TIER1}; do
@@ -70,7 +70,7 @@ ksysroot_debian_iterate2() {
 
 # Debian Tier 2 platforms on testing
 # Debian Tier 3 platforms on stable
-ksysroot_debian_iterate3() {
+ksysroot_Debian_iterate3() {
   local arch_type version
 
   for arch_type in ${DEBIAN_TIER2}; do
@@ -85,10 +85,10 @@ ksysroot_debian_iterate3() {
   done
 }
 
-ksysroot_debian_iterate() {
-  ksysroot_debian_iterate1
-  ksysroot_debian_iterate2
-  ksysroot_debian_iterate3
+ksysroot_Debian_iterate() {
+  ksysroot_Debian_iterate1
+  ksysroot_Debian_iterate2
+  ksysroot_Debian_iterate3
 }
 
 # set variables describing the sysroot
@@ -98,7 +98,7 @@ ksysroot_debian_iterate() {
 # * KSYSROOT_FLAVOUR
 # * DEBIAN_NAME, DEBIAN_VERSION, DEBIAN_GCC, DEBIAN_ARCH
 # * MESON_CPU, MESON_CPUFAMILY, MESON_ENDIAN, MESON_SYSTEM
-ksysroot_debian_meta() {
+ksysroot_Debian_meta() {
   local basetriple="${1%@*}"
   local flavour="${1#*@}"
 
@@ -106,7 +106,7 @@ ksysroot_debian_meta() {
     flavour=debian12
   fi
 
-  DEBIAN_VERSION="${flavour#debian}"
+  DEBIAN_VERSION="${flavour#Debian}"
   1>&2 echo input="$1" basetriple="${basetriple}" flavour="${flavour}"
 
   # /usr/local/sbin/debootstrap --print-debs --arch=amd64  --cache-dir=$PWD/cache/debian bullseye tmp | grep "gcc.*base"
@@ -136,7 +136,7 @@ ksysroot_debian_meta() {
       return 1
       ;;
   esac
-  KSYSROOT_OSFLAVOUR="debian"
+  KSYSROOT_OSFLAVOUR="Debian"
   KSYSROOT_OSRELEASE="${DEBIAN_VERSION}"
 
   # https://wiki.debian.org/Multiarch/Tuples#Why_not_use_GNU_triplets.3F
@@ -402,12 +402,12 @@ debian_fixup() {
 # emits metadata and URLs that are required to build the sysroot
 # caches the downloaded DEBs in ${CACHE_DIR}/debian
 # slow, as it needs to obtain archive index and download all DEBs
-ksysroot_debian_bom() {
+ksysroot_Debian_bom() {
   : "${DEBOOTSTRAP:=$(require_tool debootstrap /usr/local/sbin /usr/sbin)}"
 
   local db_tmp
 
-  ksysroot_debian_meta "$1"
+  ksysroot_Debian_meta "$1"
   mkdir -p "${CACHE_DIR}"/debian
 
   db_tmp="$(call_debootstrap --download-only)"
@@ -425,7 +425,7 @@ ksysroot_debian_bom() {
   rm -rf "${db_tmp}"
 }
 
-ksysroot_debian_bomresource() {
+ksysroot_Debian_bomresource() {
   local pkg="$1"
   local version="$2"
   local url="$3"
@@ -447,14 +447,14 @@ ksysroot_debian_bomresource() {
     -s '%^\./lib\(.*\)%./usr/lib\1%'
 }
 
-ksysroot_debian_bomclose() {
+ksysroot_Debian_bomclose() {
   debian_fixup
 }
 
 # $1 - flavoured base triple
 # $2 - target directory
 #   e.g. aarch64-linux-gnu@debian12
-ksysroot_debian_install() {
+ksysroot_Debian_install() {
   : "${DEBOOTSTRAP:=$(require_tool debootstrap /usr/local/sbin /usr/sbin)}"
 
   ksysroot_prefix "${2:-ksysroot-$1}"
@@ -462,7 +462,7 @@ ksysroot_debian_install() {
 
   local db_tmp
 
-  ksysroot_debian_meta "$1"
+  ksysroot_Debian_meta "$1"
 
   mkdir -p "${CACHE_DIR}"/debian
 

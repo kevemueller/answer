@@ -33,6 +33,7 @@ require_tool() {
 : "${CURL:=$(require_tool curl)}"
 : "${FIND:=$(require_tool find)}"
 : "${READLINK:=$(require_tool readlink)}"
+: "${MD5SUM:=$(require_tool md5sum)}"
 : "${SHA256SUM:=$(require_tool sha256sum)}"
 : "${SHA512SUM:=$(require_tool sha512sum)}"
 : "${XARGS:=$(require_tool xargs)}"
@@ -81,6 +82,7 @@ EOF
 shacheck() {
   local alg
   case "${#1}" in
+    32) alg="${MD5SUM}" ;;
     64) alg="${SHA256SUM}" ;;
     128) alg="${SHA512SUM}" ;;
     *)
