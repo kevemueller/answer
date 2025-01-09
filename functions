@@ -344,7 +344,7 @@ mk_wrappers() {
   # shellcheck disable=SC2086 disable=SC2090
   mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${wrapname}-cpp" "${LLVM_DIR}"/clang-cpp ${common_args}
   # shellcheck disable=SC2086 disable=SC2090
-  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${wrapname}-ld" "${LLD_DIR}/${KSYSROOT_LINKER}" ${sysroot_args} ${KSYSROOT_CPP_LINK_QUIRK_ARGS_WRAP}
+  mk_wrapper "${KSYSROOT_PREFIX_ABS}/bin/${wrapname}-ld" "${LLD_DIR}/${KSYSROOT_LINKER}" ${sysroot_args}
 
   emit_meta_env "${wrapname}" >"${KSYSROOT_PREFIX_ABS}"/bin/"${wrapname}"-env
   chmod +x "${KSYSROOT_PREFIX_ABS}"/bin/"${wrapname}"-env

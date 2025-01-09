@@ -103,7 +103,7 @@ ksysroot_Debian_meta() {
   local flavour="${1#*@}"
 
   if [ "${basetriple}" = "${flavour}" ]; then
-    flavour=debian12
+    flavour=Debian12
   fi
 
   DEBIAN_VERSION="${flavour#Debian}"
