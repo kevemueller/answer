@@ -17,11 +17,11 @@ FREEBSD_SNAP="15.0-CURRENT 14.2-STABLE 13.4-STABLE"
 
 freebsd_flavour() {
   local vnum="${2%-*}"
-  printf "%s-freebsd%s@freebsd%s\n" "$1" "${vnum}" "$2"
+  printf "%s-freebsd%s@FreeBSD%s\n" "$1" "${vnum}" "$2"
 }
 
 # FreeBSD Tier 1 platforms on most recent supported Release
-ksysroot_freebsd_iterate1() {
+ksysroot_FreeBSD_iterate1() {
   local arch_type version
 
   for arch_type in ${COMMON_TIER1}; do
@@ -33,7 +33,7 @@ ksysroot_freebsd_iterate1() {
 
 # FreeBSD Tier 1 platforms on legacy supported Releases + snapshots
 # FreeBSD Tier 2 platforms on most recent supported Releases
-ksysroot_freebsd_iterate2() {
+ksysroot_FreeBSD_iterate2() {
   local arch_type version
 
   for arch_type in ${COMMON_TIER1}; do
@@ -50,7 +50,7 @@ ksysroot_freebsd_iterate2() {
 
 # FreeBSD Tier 2 platforms on legacy supported Releases + snapshots
 # FreeBSD Tier 3 platforms on most recent supported Releases
-ksysroot_freebsd_iterate3() {
+ksysroot_FreeBSD_iterate3() {
   local arch_type version
 
   for arch_type in ${FREEBSD_TIER2}; do
@@ -65,10 +65,10 @@ ksysroot_freebsd_iterate3() {
   done
 }
 
-ksysroot_freebsd_iterate() {
-  ksysroot_freebsd_iterate1
-  ksysroot_freebsd_iterate2
-  ksysroot_freebsd_iterate3
+ksysroot_FreeBSD_iterate() {
+  ksysroot_FreeBSD_iterate1
+  ksysroot_FreeBSD_iterate2
+  ksysroot_FreeBSD_iterate3
 }
 
 freebsd_quirks() {
@@ -89,16 +89,16 @@ freebsd_quirks() {
 }
 
 # $1 - flavoured base triple
-ksysroot_freebsd_meta() {
+ksysroot_FreeBSD_meta() {
   local basetriple="${1%@*}"
   local flavour="${1#*@}"
 
   if [ "${basetriple}" = "${flavour}" ]; then
     FREEBSD_KERNEL="${basetriple##*freebsd}"
-    flavour=freebsd${FREEBSD_KERNEL:-14.2}-RELEASE
-    FREEBSD_VERSION="${flavour#freebsd}"
+    flavour=FreeBSD${FREEBSD_KERNEL:-14.2}-RELEASE
+    FREEBSD_VERSION="${flavour#FreeBSD}"
   else
-    FREEBSD_VERSION="${flavour#freebsd}"
+    FREEBSD_VERSION="${flavour#FreeBSD}"
   fi
   FREEBSD_KERNEL="${FREEBSD_VERSION%%-*}"
 
@@ -176,7 +176,7 @@ ksysroot_freebsd_meta() {
   : "${MESON_ENDIAN:=little}"
   MESON_SYSTEM="freebsd"
 
-  KSYSROOT_OSFLAVOUR="freebsd"
+  KSYSROOT_OSFLAVOUR="FreeBSD"
   KSYSROOT_OSRELEASE="${FREEBSD_VERSION}"
   # x86_64-freebsd13.2
   KSYSROOT_TRIPLE="${basetriple}"
@@ -187,8 +187,8 @@ ksysroot_freebsd_meta() {
 
 # $1 - flavoured base triple
 # emits the URLs that are required to build the sysroot
-ksysroot_freebsd_bom() {
-  ksysroot_freebsd_meta "$1"
+ksysroot_FreeBSD_bom() {
+  ksysroot_FreeBSD_meta "$1"
 
   local freebsd_base_url
   local freebsd_cache_file_prefix
@@ -220,7 +220,7 @@ ksysroot_freebsd_bom() {
     "${base_sha256}"
 }
 
-ksysroot_freebsd_bomresource() {
+ksysroot_FreeBSD_bomresource() {
   local _pkg="$1"
   local version="$2"
   local url="$3"
@@ -232,7 +232,7 @@ ksysroot_freebsd_bomresource() {
   ${TAR} -C "${KSYSROOT_SYSROOT}" -xf "${resource_file}" ./lib ./usr/lib ./usr/include ./usr/libdata/pkgconfig
 }
 
-ksysroot_freebsd_bomclose() {
+ksysroot_FreeBSD_bomclose() {
   # Brew removes empty directories, keep them
   ${FIND} "${KSYSROOT_SYSROOT}" -type d -empty | ${XARGS} -I'{}' touch '{}'/.empty
   fix_abs_link "${KSYSROOT_SYSROOT}"
@@ -240,11 +240,11 @@ ksysroot_freebsd_bomclose() {
   ksysroot_emit /usr/lib /usr/local/libdata/pkgconfig /usr/libdata/pkgconfig
 }
 
-ksysroot_freebsd_install() {
-  ksysroot_freebsd_bom "$1" | ksysroot_frombom "${2:-ksysroot-$1}" "$3"
+ksysroot_FreeBSD_install() {
+  ksysroot_FreeBSD_bom "$1" | ksysroot_frombom "${2:-ksysroot-$1}" "$3"
 }
 
-ksysroot_freebsd_pkgbase() {
+ksysroot_FreeBSD_pkgbase() {
   # FreeBSD-clibs-dev FreeBSD-clibs FreeBSD-libcompiler_rt-dev
   echo FIXME: implement
   return 1

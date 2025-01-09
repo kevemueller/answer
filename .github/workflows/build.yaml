@@ -67,12 +67,13 @@ jobs:
           - ubuntu-24.04_apt
         cross:
           - native
-          - aarch64-freebsd@freebsd14.2-RELEASE
-          - x86_64-freebsd@freebsd14.2-RELEASE
-          - aarch64-linux-gnu@debian12
-          - x86_64-linux-gnu@debian12
-          - aarch64-linux-gnu@debian13
-          - x86_64-linux-gnu@debian13
+          - aarch64-freebsd@FreeBSD14.2-RELEASE
+          - x86_64-freebsd@FreeBSD14.2-RELEASE
+          - aarch64-linux-gnu@Debian12
+          - x86_64-linux-gnu@Debian12
+          - aarch64-linux-gnu@Debian13
+          - x86_64-linux-gnu@Debian13
+          - x86_64-dragonflybsd
         include:
           - build-os-pkg: macos-15
             build-os: macos-15

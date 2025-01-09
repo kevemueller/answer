@@ -1,0 +1,113 @@
+# shellcheck shell=sh
+set -e
+
+: "${BSDTAR:=$(require_tool bsdtar)}"
+
+DFLYBSD_TIER1="x86_64"
+
+DFLYBSD_PRODUCTION1="6.4"
+
+dflybsd_flavour() {
+  printf "%s-dragonflybsd%s@DragonFlyBSD-%s\n" "$1" "$2" "$2"
+}
+
+# DragonFlyBSD Tier 1 platforms on most recent supported Release
+ksysroot_DragonFlyBSD_iterate1() {
+  local arch_type version
+
+  for arch_type in ${DFLYBSD_TIER1}; do
+    for version in ${DFLYBSD_PRODUCTION1}; do
+      dflybsd_flavour "${arch_type}" "${version}"
+    done
+  done
+}
+ksysroot_DragonFlyBSD_iterate2() {
+  :
+}
+ksysroot_DragonFlyBSD_iterate3() {
+  :
+}
+
+ksysroot_DragonFlyBSD_iterate() {
+  ksysroot_DragonFlyBSD_iterate1
+  ksysroot_DragonFlyBSD_iterate2
+  ksysroot_DragonFlyBSD_iterate3
+}
+
+# $1 - flavoured base triple
+ksysroot_DragonFlyBSD_meta() {
+  local basetriple="${1%@*}"
+  local flavour="${1#*@}"
+
+  if [ "${basetriple}" = "${flavour}" ]; then
+    DFLYBSD_KERNEL="${basetriple##*dragonflybsd}"
+    flavour=DragonFlyBSD-${DFLYBSD_KERNEL:-6.4}
+  fi
+  DFLYBSD_VERSION="${flavour#DragonFlyBSD-}"
+  DFLYBSD_KERNEL="${DFLYBSD_VERSION%%-*}"
+
+  case "${basetriple}" in
+    amd64* | x86_64*)
+      MESON_CPUFAMILY="x86_64"
+      basetriple="x86_64-dragonflybsd${DFLYBSD_KERNEL}"
+      ;;
+    *)
+      echo Unknown DragonFlyBSD architecture "${basetriple}"
+      return 1
+      ;;
+  esac
+
+  MESON_CPU=${MESON_CPUFAMILY}
+  : "${MESON_ENDIAN:=little}"
+  MESON_SYSTEM="dragonfly"
+
+  KSYSROOT_OSFLAVOUR="DragonFlyBSD"
+  KSYSROOT_OSRELEASE="${DFLYBSD_VERSION}"
+  KSYSROOT_TRIPLE="${basetriple}"
+  KSYSROOT_FULL_TRIPLE="${basetriple}"
+  KSYSROOT_LINKER="ld.lld"
+  KSYSROOT_LICENSE="BSD-3-Clause"
+}
+
+# $1 - flavoured base triple
+# emits the URLs that are required to build the sysroot
+ksysroot_DragonFlyBSD_bom() {
+  ksysroot_DragonFlyBSD_meta "$1"
+
+  local dflybsd_base_url="https://avalon.dragonflybsd.org/iso-images"
+  local dflybsd_iso="dfly-x86_64-${DFLYBSD_VERSION}.0_REL.iso.bz2"
+
+  manifest_file="$(cache "${dflybsd_base_url}"/md5.txt)"
+  iso_md5=$(sed -nE "s%^MD5 \(${dflybsd_iso}\) = ([0-9a-fA-F]{32}).*%\1%p" "${manifest_file}")
+
+  ksysroot_bomconstants
+  printf "# DFLYBSD_VERSION=%s DFLYBSD_KERNEL=%s\n" "${DFLYBSD_VERSION}" "${DFLYBSD_KERNEL}"
+
+  printf "%s %s %s %s %s\n" "${dflybsd_iso}" "${DFLYBSD_VERSION}" \
+    "${dflybsd_base_url}/${dflybsd_iso}" \
+    "DragonFlyBSD/${dflybsd_iso}" \
+    "${iso_md5}"
+}
+
+ksysroot_DragonFlyBSD_bomresource() {
+  local _pkg="$1"
+  local version="$2"
+  local url="$3"
+  local file="$4"
+  local md5="$5"
+
+  local resource_file
+  resource_file="$(cache "${url}" "${file}" "${md5}")"
+  ${BSDTAR} -C "${KSYSROOT_SYSROOT}" -xf "${resource_file}" usr/lib usr/libexec/gcc* usr/local/lib usr/include usr/local/include usr/libdata usr/local/libdata
+}
+
+ksysroot_DragonFlyBSD_bomclose() {
+  # Brew removes empty directories, keep them
+  ${FIND} "${KSYSROOT_SYSROOT}" -type d -empty | ${XARGS} -I'{}' touch '{}'/.empty
+  # fix_abs_link "${KSYSROOT_SYSROOT}"
+  ksysroot_emit /usr/lib /usr/libdata/pkgconfig /usr/local/libdata/pkgconfig
+}
+
+ksysroot_DragonFlyBSD_install() {
+  ksysroot_DragonFlyBSD_bom "$1" | ksysroot_frombom "${2:-ksysroot-$1}" "$3"
+}
