@@ -1,7 +1,6 @@
 # shellcheck shell=sh
 set -e
 
-: "${APK:=$(require_tool apk)}"
 : "${BSDTAR:=$(require_tool bsdtar)}"
 : "${MKTEMP:=$(require_tool mktemp)}"
 : "${XARGS:=$(require_tool xargs)}"
@@ -137,6 +136,8 @@ ksysroot_Alpine_meta() {
 # emits the URLs that are required to build the sysroot
 ksysroot_Alpine_bom() {
   ksysroot_Alpine_meta "$1"
+
+  : "${APK:=$(require_tool apk)}"
 
   local alpine_root
   alpine_root="$(mktemp -dt alpine-XXXXXX)"
