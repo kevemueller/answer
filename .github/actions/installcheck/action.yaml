@@ -19,7 +19,7 @@ runs:
       shell: sh
       run: |
         brew update --quiet || true
-        brew install llvm lld meson kevemueller/ksysroot/debootstrap
+        brew install llvm lld meson kevemueller/ksysroot/debootstrap kevemueller/ksysroot/apk
         # pkgconf comes preinstalled on the GitHub runner
 
     - name: install apt packages (Linux/native)
@@ -31,6 +31,11 @@ runs:
         # fakeroot comes preinstalled on the GitHub runner
         sudo apt-get -yq --no-install-suggests --no-install-recommends install \
           build-essential llvm lld meson libarchive-tools debootstrap
+        # ~/.local/bin is on the default PATH
+        mkdir -p "${HOME}"/.local/bin
+        wget -O "${HOME}"/.local/bin/apk \
+          https://gitlab.alpinelinux.org/api/v4/projects/5/packages/generic//v3.0.0_rc3/x86_64/apk.static
+        chmod +x "${HOME}"/.local/bin/apk
 
     - name: Set up Homebrew (Linux/brew)
       if: (runner.os == 'Linux') && (inputs.pkgmode == 'brew')
@@ -45,7 +50,8 @@ runs:
           build-essential
 
         # we want the brew version of pkgconf
-        brew install llvm lld pkgconf meson libarchive kevemueller/ksysroot/debootstrap
+        brew install llvm lld pkgconf meson libarchive \
+          kevemueller/ksysroot/debootstrap kevemueller/ksysroot/apk
 
     - name: install ksysroot (bom/frombom)
       shell: sh

@@ -1,0 +1,236 @@
+# shellcheck shell=sh
+set -e
+
+: "${APK:=$(require_tool apk)}"
+: "${BSDTAR:=$(require_tool bsdtar)}"
+: "${MKTEMP:=$(require_tool mktemp)}"
+: "${XARGS:=$(require_tool xargs)}"
+
+ALPINE_TIER2="armv7 ppc64le x86 loongarch64"
+ALPINE_TIER3="armhf riscv64 s390x"
+
+ALPINE_PRODUCTION1="3.21"
+ALPINE_PRODUCTION2=""
+ALPINE_SNAP="edge"
+
+alpine_flavour() {
+  printf "%s-linux-musl@Alpine-%s\n" "$1" "$2"
+}
+
+# Alpine Tier 1 platforms on most recent supported Release
+ksysroot_Alpine_iterate1() {
+  local arch_type version
+
+  for arch_type in ${COMMON_TIER1}; do
+    for version in ${ALPINE_PRODUCTION1}; do
+      alpine_flavour "${arch_type}" "${version}"
+    done
+  done
+}
+
+# Alpine Tier 1 platforms on legacy supported Releases + snapshots
+# Alpine Tier 2 platforms on most recent supported Releases
+ksysroot_Alpine_iterate2() {
+  local arch_type version
+
+  for arch_type in ${COMMON_TIER1}; do
+    for version in ${ALPINE_PRODUCTION2} ${ALPINE_SNAP}; do
+      alpine_flavour "${arch_type}" "${version}"
+    done
+  done
+  for arch_type in ${ALPINE_TIER2}; do
+    for version in ${ALPINE_PRODUCTION1}; do
+      alpine_flavour "${arch_type}" "${version}"
+    done
+  done
+}
+
+# Alpine Tier 2 platforms on legacy supported Releases + snapshots
+# Alpine Tier 3 platforms on most recent supported Releases
+ksysroot_Alpine_iterate3() {
+  local arch_type version
+
+  for arch_type in ${ALPINE_TIER2}; do
+    for version in ${ALPINE_PRODUCTION2} ${ALPINE_SNAP}; do
+      alpine_flavour "${arch_type}" "${version}"
+    done
+  done
+  for arch_type in ${ALPINE_TIER3}; do
+    for version in ${ALPINE_PRODUCTION1}; do
+      alpine_flavour "${arch_type}" "${version}"
+    done
+  done
+}
+
+ksysroot_Alpine_iterate() {
+  ksysroot_Alpine_iterate1
+  ksysroot_Alpine_iterate2
+  ksysroot_Alpine_iterate3
+}
+
+# $1 - flavoured base triple
+ksysroot_Alpine_meta() {
+  local default_flavour="Alpine-3.21"
+  local basetriple="${1%@*}"
+
+  ALPINE_ARCHITECTURE="${basetriple%%-*}"
+  ALPINE_KERNEL="lts"
+  case "${ALPINE_ARCHITECTURE}" in
+    armhf | armv6)
+      ALPINE_ARCHITECTURE="armhf"
+      KSYSROOT_TRIPLE="armv6-alpine-linux-musleabihf"
+      MESON_CPUFAMILY="arm"
+      MESON_CPU="bcmrpi"
+      ALPINE_KERNEL="rpi"
+      ;;
+    armv7)
+      KSYSROOT_TRIPLE="${ALPINE_ARCHITECTURE}-alpine-linux-musleabihf"
+      MESON_CPUFAMILY="arm"
+      MESON_CPU="bcm2709"
+      ;;
+    mips64)
+      KSYSROOT_TRIPLE="${ALPINE_ARCHITECTURE}-alpine-linux-musl"
+      MESON_CPUFAMILY="mips64"
+      default_flavour="Alpine-3.14"
+      # mips64 fails with
+      # WARNING: The indexes contain broken packages which are not installable.
+      # does not have libstdc++-dev
+      ;;
+    ppc64le | powerpc64le)
+      ALPINE_ARCHITECTURE="ppc64le"
+      KSYSROOT_TRIPLE="powerpc64le-alpine-linux-musl"
+      MESON_CPUFAMILY="ppc64"
+      MESON_CPU="power8"
+      ;;
+    x86 | i586 | i686)
+      ALPINE_ARCHITECTURE="x86"
+      KSYSROOT_TRIPLE="i586-alpine-linux-musl"
+      MESON_CPUFAMILY="x86"
+      MESON_CPU="i586"
+      ;;
+    *)
+      KSYSROOT_TRIPLE="${ALPINE_ARCHITECTURE}-alpine-linux-musl"
+      MESON_CPUFAMILY="${ALPINE_ARCHITECTURE}"
+      ;;
+  esac
+
+  local flavour="${1#*@}"
+  if [ "${basetriple}" = "${flavour}" ]; then
+    flavour="${default_flavour}"
+  fi
+  ALPINE_BRANCH="${flavour#Alpine-}"
+  if [ "${ALPINE_BRANCH}" != "edge" ]; then
+    ALPINE_BRANCH="v${ALPINE_BRANCH}"
+  fi
+
+  : "${MESON_CPU:=${MESON_CPUFAMILY}}"
+  : "${MESON_ENDIAN:=little}"
+  MESON_SYSTEM="linux"
+
+  KSYSROOT_OSFLAVOUR="Alpine"
+  KSYSROOT_OSRELEASE="${ALPINE_BRANCH}"
+  KSYSROOT_LINKER="ld.lld"
+  KSYSROOT_LICENSE="MIT"
+}
+
+# $1 - flavoured base triple
+# emits the URLs that are required to build the sysroot
+ksysroot_Alpine_bom() {
+  ksysroot_Alpine_meta "$1"
+
+  local alpine_root
+  alpine_root="$(mktemp -dt alpine-XXXXXX)"
+  1>&2 echo working in "${alpine_root}"
+
+  ${APK} --root "${alpine_root}" --arch "${ALPINE_ARCHITECTURE}" \
+    --repository "https://dl-cdn.alpinelinux.org/alpine/${ALPINE_BRANCH}/main" \
+    --allow-untrusted --update-cache --no-interactive \
+    add --initdb --usermode --no-scripts \
+    alpine-keys >/dev/null
+
+  cat >"${alpine_root}"/etc/apk/repositories <<EOF
+http://dl-cdn.alpinelinux.org/alpine/${ALPINE_BRANCH}/main
+# http://dl-cdn.alpinelinux.org/alpine/${ALPINE_BRANCH}/community
+EOF
+
+  # ensure we re-create the index with verification, potentially adding more constraints
+  ${APK} --root "${alpine_root}" --update-cache \
+    add --usermode --no-scripts >/dev/null
+
+  linux_apk=$(${APK} --root "${alpine_root}" fetch --simulate --url --output "${alpine_root}" "linux-${ALPINE_KERNEL}")
+  LINUX_VERSION=$(basename "${linux_apk}" | sed -nE 's/^(.*)-([0-9]+\.[0-9]+)\.[0-9.]+(-r[0-9]+)?\.apk$/\2/p')
+
+  KSYSROOT_FULL_TRIPLE="$(printf "%s" "${KSYSROOT_TRIPLE}" | sed "s/linux/linux${LINUX_VERSION}/;s/-alpine//")"
+
+  ksysroot_bomconstants
+  printf "# ALPINE_BRANCH=%s ALPINE_KERNEL=%s LINUX_VERSION=%s\n" "${ALPINE_BRANCH}" "${ALPINE_KERNEL}" "${LINUX_VERSION}"
+
+  local apk_dir="Alpine/${ALPINE_ARCHITECTURE}-${ALPINE_BRANCH}"
+  local apk_cache_dir="${CACHE_DIR}/${apk_dir}"
+  mkdir -p "${apk_cache_dir}"
+
+  # fetch --simulate does not provide checksums, the checksum in the index is not the checksum
+  # of the package file
+  # fetch will not emit lines for packages that are already locally cached, hence we always need
+  # to download fresh packages
+  # get the full list of URL, as there are no apks under ${alpine_root}
+  # shellcheck disable=SC2086
+  ${APK} --root "${alpine_root}" fetch --simulate -R --url --output "${alpine_root}" \
+    musl-dev libstdc++-dev gcc ${KSYSROOT_ADD_PKG} >${alpine_root}/pkg-url
+
+  # get the apks again, caching them in the right target location
+  # already downloaded files will be verified and not downloaded again
+  # shellcheck disable=SC2086
+  ${APK} --root "${alpine_root}" fetch -R --output "${apk_cache_dir}" \
+    musl-dev libstdc++-dev gcc ${KSYSROOT_ADD_PKG} >/dev/null
+
+  # fetch output cannot be piped to while/read loop as the line is already emitted while the
+  # file is still fetched, i.e. there is a race condition
+  while IFS= read -r url; do
+    basefile="$(basename "${url}")"
+    sha256="$(shacompute "${apk_cache_dir}/${basefile}")"
+
+    name="$(echo "${basefile}" | sed -nE 's/^(.*)-([0-9.]+(-r[0-9]+))\.apk$/\1/p')"
+    version="$(echo "${basefile}" | sed -nE 's/^(.*)-([0-9.]+(-r[0-9]+)?)\.apk$/\2/p')"
+
+    printf "%s %s %s %s %s\n" "${name}" "${version}" \
+      "${url}" \
+      "${apk_dir}/${basefile}" \
+      "${sha256}"
+  done <"${alpine_root}"/pkg-url
+
+  rm -rf "${alpine_root}"
+}
+
+ksysroot_Alpine_bomresource() {
+  local _pkg="$1"
+  local version="$2"
+  local url="$3"
+  local file="$4"
+  local sha256="$5"
+
+  local resource_file
+  resource_file="$(cache "${url}" "${file}" "${sha256}")"
+
+  # set --
+  # echo filtering
+  # for i in "lib/" "usr/lib/" "usr/*-alpine-*/lib/" "usr/include/"; do
+  #   if tar -qtf "${resource_file}" "$i"; then
+  #     set -- "$@" "$i"
+  #   fi
+  # done
+  # echo filtered "$@"
+
+  ${BSDTAR} -C "${KSYSROOT_SYSROOT}" -xf "${resource_file}" lib/ usr/lib/ usr/*-alpine-*/lib/ usr/include/ 2>/dev/null || true
+}
+
+ksysroot_Alpine_bomclose() {
+  # Brew removes empty directories, keep them
+  ${FIND} "${KSYSROOT_SYSROOT}" -type d -empty | ${XARGS} -I'{}' touch '{}'/.empty
+  fix_abs_link "${KSYSROOT_SYSROOT}"
+  ksysroot_emit /usr/lib /usr/lib/pkgconfig
+}
+
+ksysroot_Alpine_install() {
+  ksysroot_Alpine_bom "$1" | ksysroot_frombom "${2:-ksysroot-$1}" "$3"
+}

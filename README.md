@@ -129,6 +129,24 @@ rpcsvc-proto 1.4.3-1 http://deb.debian.org/debian/pool/main/r/rpcsvc-proto/rpcsv
 Other architectures and Debian versions _may_ work as well.
 `ksysroot` currently downloads a minimal environment for C/C++ usage, but can be parameterized to include additional packages.
 
+### Alpine Linux
+
+`ksysroot` uses `apk` to select the most recent versions of the packages comprising the build system. It has support for the current versions of Alpine Linux and all release architectures, namely
+
+| Triple                    | Flavour Branch  | Flavour Edge  | Alpine Architecture |
+| ------------------------- | --------------- | ------------- | ------------------- |
+| aarch64-linux-musl        | @Alpine-3.21    | @Alpine-edge  | aarch64             |
+| armv6-linux-musleabihf    | @Alpine-3.21    | @Alpine-edge  | armhf               |
+| armv7-linux-musleabihf    | @Alpine-3.21    | @Alpine-edge  | armv7               |
+| loongarch64-linux-musl    | @Alpine-3.21    | @Alpine-edge  | loongarch64         |
+| powerpc64le-linux-musl    | @Alpine-3.21    | @Alpine-edge  | ppc64le             |
+| riscv64-linux-musl        | @Alpine-3.21    | @Alpine-edge  | riscv64             |
+| s390x-linux-musl          | @Alpine-3.21    | @Alpine-edge  | s390x               |
+| i586-linux-musl           | @Alpine-3.21    | @Alpine-edge  | x86                 |
+| x86_64-linux-musl         | @Alpine-3.21    | @Alpine-edge  | x86_64              |
+
+`ksysroot` currently downloads a minimal environment for C/C++ usage, but can be parameterized to include additional packages. On Alpine the `libstdc++` package is installed for C++.
+
 ## FreeBSD
 `ksysroot` uses `base.txz` directly from the FreeBSD mirrors to download the files comprising the build. It has support for the current versions of FreeBSD and all released architectures, namely
 

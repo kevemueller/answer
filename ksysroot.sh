@@ -30,6 +30,7 @@ fi
 : "${CACHE_DIR:=cache}"
 
 . "${KSYSROOT_PREFIX}"/functions-native
+. "${KSYSROOT_PREFIX}"/functions-Alpine
 . "${KSYSROOT_PREFIX}"/functions-Debian
 . "${KSYSROOT_PREFIX}"/functions-DragonFlyBSD
 . "${KSYSROOT_PREFIX}"/functions-FreeBSD
@@ -134,11 +135,13 @@ dispatch() {
       ;;
     frombom)
       ksysroot_frombom "$@"
+      1>&2 echo Performed "${cmd}" "$@" for "${KSYSROOT_TRIPLE}" in "${KSYSROOT_PREFIX}"
       ;;
     iterate*)
       local filter="${1:-.}"
       {
         ksysroot_native_"${cmd}"
+        ksysroot_Alpine_"${cmd}"
         ksysroot_Debian_"${cmd}"
         ksysroot_DragonFlyBSD_"${cmd}"
         ksysroot_FreeBSD_"${cmd}"
@@ -147,7 +150,10 @@ dispatch() {
       ;;
     *)
       case "$1" in
-        *linux*-gnu | *@Debian*)
+        *linux*-musl* | *@Alpine*)
+          ksysroot_Alpine_"${cmd}" "$@"
+          ;;
+        *linux*-gnu* | *@Debian*)
           ksysroot_Debian_"${cmd}" "$@"
           ;;
         *freebsd* | *FreeBSD*)
