@@ -105,7 +105,7 @@ cache() {
   local cache_file="${CACHE_DIR}/${base}"
   >&2 echo Caching "${url}" to "${cache_file}"
   mkdir -p "$(dirname "${cache_file}")"
-  echo "${url}" >"${cache_file}".url
+  # echo "${url}" >"${cache_file}".url
   if [ -e "${cache_file}" ] && [ "${sha256}" ] && shacheck "${sha256}" "${cache_file}"; then
     # 2>&1 echo SHA matched
     echo "${cache_file}"
@@ -284,7 +284,7 @@ emit_meta_llvm_cross() {
   emit_meta_llvm "${name}"
 
   cat <<EOF
-triple = '${KSYSROOT_FULL_TRIPLE}'
+triple = '${KSYSROOT_TRIPLE}'
 sysroot = '${KSYSROOT_SYSROOT}'
 common_quirk_args = [${KSYSROOT_COMMON_QUIRK_ARGS_MESON}]
 common_args = ['-target', triple, '--sysroot=' + sysroot] + common_quirk_args
@@ -325,7 +325,7 @@ mk_wrappers() {
     wrapname="${KSYSROOT_FULL_TRIPLE}"
     # shellcheck disable=SC2089
     sysroot_args="--sysroot=\"${KSYSROOT_SYSROOT}\""
-    common_args="-target ${KSYSROOT_FULL_TRIPLE} ${sysroot_args} ${common_args}"
+    common_args="-target ${KSYSROOT_TRIPLE} ${sysroot_args} ${common_args}"
     # shellcheck disable=SC2089
     pkgconf_args="--personality=\"${KSYSROOT_PREFIX_ABS}/pkg-config.personality\""
   fi

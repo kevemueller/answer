@@ -334,13 +334,14 @@ ksysroot_Debian_meta() {
 }
 
 debian_quirks() {
-  case "${KSYSROOT_TRIPLE}" in
-    powerpc64le-linux-gnu | s390x-linux-gnu)
-      KSYSROOT_COMMON_QUIRK_ARGS_MESON="'--gcc-install-dir=' + sysroot / 'usr/lib/gcc/${KSYSROOT_TRIPLE}/${DEBIAN_GCC}'"
-      KSYSROOT_COMMON_QUIRK_ARGS_WRAP="--gcc-install-dir=\"${KSYSROOT_SYSROOT}/usr/lib/gcc/${KSYSROOT_TRIPLE}/${DEBIAN_GCC}\""
-      ;;
-    *) ;;
-  esac
+  # case "${KSYSROOT_TRIPLE}" in
+  #   powerpc64le-linux-gnu | s390x-linux-gnu)
+  #     KSYSROOT_COMMON_QUIRK_ARGS_MESON="'--gcc-install-dir=' + sysroot / 'usr/lib/gcc/${KSYSROOT_TRIPLE}/${DEBIAN_GCC}'"
+  #     KSYSROOT_COMMON_QUIRK_ARGS_WRAP="--gcc-install-dir=\"${KSYSROOT_SYSROOT}/usr/lib/gcc/${KSYSROOT_TRIPLE}/${DEBIAN_GCC}\""
+  #     ;;
+  #   *) ;;
+  # esac
+  :
 }
 
 call_debootstrap() {

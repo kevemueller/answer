@@ -104,7 +104,9 @@ jobs:
           doublecheck: true
 
   init2:
-    needs: init1
+    needs:
+      - init1
+      - lint
     runs-on: macos-15
     outputs:
       triples_list: ${{ steps.generate-list.outputs.triples_list }}
