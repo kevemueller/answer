@@ -57,6 +57,10 @@ ksysroot_NetBSD_iterate3() {
   done
 }
 
+ksysroot_NetBSD_iterate4() {
+  :
+}
+
 ksysroot_NetBSD_iterate() {
   ksysroot_NetBSD_iterate1
   ksysroot_NetBSD_iterate2
@@ -130,12 +134,12 @@ ksysroot_NetBSD_bom() {
   printf "# NETBSD_VERSION=%s NETBSD_KERNEL=%s NETBSD_PORT=%s\n" "${NETBSD_VERSION}" "${NETBSD_KERNEL}" "${NETBSD_PORT}"
 
   local ball_sha512
-  for ball in base comp; do
-    ball_sha512=$(sed -nE "s%^SHA512 \(${sets_dir}/${ball}.tar.xz\)[[:space:]]*=[[:space:]]*([0-9a-fA-F]{128}).*%\1%p" "${manifest_file}")
+  for ball in base.tar.xz comp.tar.xz; do
+    ball_sha512=$(sed -nE "s%^SHA512 \(${sets_dir}/${ball}\)[[:space:]]*=[[:space:]]*([0-9a-fA-F]{128}).*%\1%p" "${manifest_file}")
 
-    printf "%s %s %s %s %s\n" "${ball}.tar.xz" "${NETBSD_VERSION}" \
-      "${netbsd_base_url}/${sets_dir}/${ball}.tar.xz" \
-      "${netbsd_cache_file_prefix}${ball}.tar.xz" \
+    printf "%s %s %s %s %s\n" "${ball}" "${NETBSD_VERSION}" \
+      "${netbsd_base_url}/${sets_dir}/${ball}" \
+      "${netbsd_cache_file_prefix}${ball}" \
       "${ball_sha512}"
   done
 }

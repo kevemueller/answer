@@ -65,6 +65,10 @@ ksysroot_FreeBSD_iterate3() {
   done
 }
 
+ksysroot_FreeBSD_iterate4() {
+  :
+}
+
 ksysroot_FreeBSD_iterate() {
   ksysroot_FreeBSD_iterate1
   ksysroot_FreeBSD_iterate2

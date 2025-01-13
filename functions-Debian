@@ -9,11 +9,12 @@ set -e
 undeb() {
   local debfile="$1"
   shift
-  ${BSDTAR} -Oxzf "${debfile}" data.tar.xz | ${BSDTAR} -z "$@"
+  ${BSDTAR} -Oxzf "${debfile}" data.tar.xz | ${BSDTAR} -z "$@" 2>/dev/null || true
 }
 
 DEBIAN_TIER2="i586 mips64el powerpc64le"
 DEBIAN_TIER3="armel armhf mipsel s390x"
+DEBIAN_TIER4="alpha arm avr32 hppa ia64 kfreebsd-amd64 kfreebsd-i386 loong64 m32 m68k mips netbsd-i386 netbsd-alpha or1k powerpc powerpcspe s390 sparc sparc64 sh4 x32"
 
 DEBIAN_PRODUCTION1="12"
 DEBIAN_PRODUCTION2="13"
@@ -85,6 +86,17 @@ ksysroot_Debian_iterate3() {
   done
 }
 
+# Debian Tier 4 platforms on stable + testing
+ksysroot_Debian_iterate4() {
+  local arch_type version
+
+  for arch_type in ${DEBIAN_TIER4}; do
+    for version in ${DEBIAN_PRODUCTION1} ${DEBIAN_PRODUCTION2}; do
+      debian_flavour "${arch_type}" "${version}"
+    done
+  done
+}
+
 ksysroot_Debian_iterate() {
   ksysroot_Debian_iterate1
   ksysroot_Debian_iterate2
@@ -109,8 +121,43 @@ ksysroot_Debian_meta() {
   DEBIAN_VERSION="${flavour#Debian}"
   1>&2 echo input="$1" basetriple="${basetriple}" flavour="${flavour}"
 
-  # /usr/local/sbin/debootstrap --print-debs --arch=amd64  --cache-dir=$PWD/cache/debian bullseye tmp | grep "gcc.*base"
+  # /usr/local/sbin/debootstrap --print-debs --arch=amd64  --cache-dir=$PWD/cache/Debian bullseye tmp | grep "gcc.*base"
+  DEBIAN_URL="http://deb.debian.org/debian"
   case "${DEBIAN_VERSION}" in
+    4)
+      DEBIAN_NAME="etch"
+      DEBIAN_GCC="4.1"
+      DEBIAN_URL=http://archive.debian.org/debian
+      DEBIAN_PKG="libstdc++6-${DEBIAN_GCC}-dev"
+      ;;
+    5)
+      DEBIAN_NAME="lenny"
+      DEBIAN_GCC="4.3"
+      DEBIAN_URL=http://archive.debian.org/debian
+      DEBIAN_PKG="libstdc++6-${DEBIAN_GCC}-dev"
+      ;;
+    6)
+      DEBIAN_NAME="squeeze"
+      DEBIAN_GCC="4.4"
+      DEBIAN_URL=http://archive.debian.org/debian
+      DEBIAN_PKG="libstdc++6-${DEBIAN_GCC}-dev"
+      ;;
+    7)
+      DEBIAN_NAME="wheezy"
+      DEBIAN_GCC="4.7"
+      DEBIAN_URL=http://archive.debian.org/debian
+      DEBIAN_PKG="libstdc++6-${DEBIAN_GCC}-dev"
+      ;;
+    8)
+      DEBIAN_NAME="jessie"
+      DEBIAN_GCC="4.9"
+      DEBIAN_URL=http://archive.debian.org/debian
+      ;;
+    9)
+      DEBIAN_NAME="stretch"
+      DEBIAN_GCC="6"
+      DEBIAN_URL=http://archive.debian.org/debian
+      ;;
     10)
       DEBIAN_NAME="buster"
       DEBIAN_GCC="8"
@@ -131,11 +178,18 @@ ksysroot_Debian_meta() {
       DEBIAN_NAME="forky"
       DEBIAN_GCC="14"
       ;;
+    99)
+      DEBIAN_NAME="sid"
+      DEBIAN_GCC="14"
+      ;;
     *)
       echo Unknown debian version "${DEBIAN_VERSION}"
       return 1
       ;;
   esac
+  : "${DEBIAN_PKG:=libstdc++-${DEBIAN_GCC}-dev}"
+  DEBIAN_PKG="${DEBIAN_PKG} ${KSYSROOT_ADD_PKG}"
+
   KSYSROOT_OSFLAVOUR="Debian"
   KSYSROOT_OSRELEASE="${DEBIAN_VERSION}"
 
@@ -145,48 +199,61 @@ ksysroot_Debian_meta() {
     aarch64-linux*-gnu)
       DEBIAN_ARCH=arm64
       MESON_CPUFAMILY="aarch64"
+      KSYSROOT_TRIPLE="aarch64-linux-gnu"
       ;;
     arm-linux*-gnueabi)
       DEBIAN_ARCH=armel
       MESON_CPUFAMILY="arm"
+      KSYSROOT_TRIPLE="arm-linux-gnueabi"
       ;;
     arm-linux*-gnueabihf)
       DEBIAN_ARCH=armhf
       MESON_CPUFAMILY="arm"
+      KSYSROOT_TRIPLE="arm-linux-gnueabihf"
       ;;
     i386-linux*-gnu | i586-linux*-gnu | i686-linux*-gnu)
       DEBIAN_ARCH=i386
       MESON_CPUFAMILY="x86"
+      KSYSROOT_TRIPLE="i386-linux-gnu"
       ;;
     mipsel-linux*-gnu*)
       DEBIAN_ARCH="mipsel"
       MESON_CPUFAMILY="mips"
+      KSYSROOT_TRIPLE="mipsel-linux-gnu"
       ;;
     powerpc64le-linux*-gnu)
       DEBIAN_ARCH=ppc64el
       MESON_CPUFAMILY="ppc64"
+      KSYSROOT_TRIPLE="powerpc64le-linux-gnu"
       ;;
     s390x-linux*-gnu)
       DEBIAN_ARCH=s390x
       MESON_CPUFAMILY="s390x"
       MESON_ENDIAN=big
+      KSYSROOT_TRIPLE="s390x-linux-gnu"
       ;;
     x86_64-linux*-gnu | amd64-linux*-gnu)
       DEBIAN_ARCH=amd64
       MESON_CPUFAMILY="x86_64"
+      KSYSROOT_TRIPLE="x86_64-linux-gnu"
       ;;
     # DEVELOPMENT
     i386-gnu | i586-gnu | i686-gnu)
       DEBIAN_ARCH=hurd-i386
       MESON_CPUFAMILY=x86
+      DEBIAN_URL=http://ftp.ports.debian.org/debian-ports
+      KSYSROOT_TRIPLE="i386-gnu"
       ;;
     loongarch64-linux*-gnu)
       DEBIAN_ARCH=loong64
       MESON_CPUFAMILY=loongarch64
+      DEBIAN_URL=http://ftp.ports.debian.org/debian-ports
+      KSYSROOT_TRIPLE="loongarch64-linux-gnu"
       ;;
     mips64el-linux*-gnuabi64)
       DEBIAN_ARCH="mips64el"
       MESON_CPUFAMILY="mips64"
+      KSYSROOT_TRIPLE="mips64el-linux-gnuabi64"
       ;;
     powerpc-linux*-gnuspe)
       DEBIAN_ARCH="powerpcspe"
@@ -197,6 +264,8 @@ ksysroot_Debian_meta() {
       DEBIAN_ARCH=ppc64
       MESON_CPUFAMILY="ppc64"
       MESON_ENDIAN=big
+      DEBIAN_URL=http://ftp.ports.debian.org/debian-ports
+      KSYSROOT_TRIPLE="powerpc64-linux-gnu"
       ;;
     riscv64-linux*-gnu)
       DEBIAN_ARCH="riscv64"
@@ -205,15 +274,21 @@ ksysroot_Debian_meta() {
     sh4-linux*-gnu)
       DEBIAN_ARCH=sh4
       MESON_CPUFAMILY="sh4"
+      DEBIAN_URL=http://ftp.ports.debian.org/debian-ports
+      KSYSROOT_TRIPLE="sh4-linux-gnu"
       ;;
     sparc64-linux*-gnu)
       DEBIAN_ARCH=sparc64
       MESON_CPUFAMILY="sparc64"
       MESON_ENDIAN=big
+      DEBIAN_URL=http://ftp.ports.debian.org/debian-ports
+      KSYSROOT_TRIPLE="sparc64-linux-gnu"
       ;;
     x86_64-gnu | amd64-gnu)
       DEBIAN_ARCH=hurd-amd64
       MESON_CPUFAMILY="x86_64"
+      DEBIAN_URL=http://ftp.ports.debian.org/debian-ports
+      KSYSROOT_TRIPLE="x86_64-gnu"
       ;;
     # PLANNING
     arc-linux*-gnu)
@@ -269,6 +344,8 @@ ksysroot_Debian_meta() {
     x86_64-linux*-gnux32)
       DEBIAN_ARCH=x32
       MESON_CPUFAMILY=x86_64
+      DEBIAN_URL=http://ftp.ports.debian.org/debian-ports
+      KSYSROOT_TRIPLE="x86_64-linux-gnux32"
       ;;
     # EOL
     alpha-linux*-gnu)
@@ -347,12 +424,11 @@ work_out_debs () {
 	base=""
 }
 EOF
-
-  FORCE_REQUIRED="libstdc++-${DEBIAN_GCC}-dev ${KSYSROOT_ADD_PKG}" 1>&2 ${FAKEROOT} "${DEBOOTSTRAP}" \
+  FORCE_REQUIRED="${DEBIAN_PKG}" 1>&2 ${FAKEROOT} "${DEBOOTSTRAP}" \
     "$@" --arch="${DEBIAN_ARCH}" \
     --cache-dir="${cache_dir_abs}"/Debian \
     "${DEBIAN_NAME}" "${db_tmp}" \
-    http://deb.debian.org/debian "${mixin}"
+    "${DEBIAN_URL}" "${mixin}"
 
   rm "${mixin}"
   echo "${db_tmp}"
@@ -381,7 +457,6 @@ debian_fixup() {
     test -e "${KSYSROOT_SYSROOT}"/"$b" || ln -s usr/"$b" "${KSYSROOT_SYSROOT}"/"$b"
   done
 
-  KSYSROOT_TRIPLE="$(basename "$(ls -d "${KSYSROOT_SYSROOT}"/usr/lib/*gnu*)")"
   KSYSROOT_FULL_TRIPLE="$(printf "%s" "${KSYSROOT_TRIPLE}" | sed "s/linux/linux${LINUX_VERSION}/")"
 
   ksysroot_emit /usr/lib/"${KSYSROOT_TRIPLE}" -- /usr/include -- /usr/lib/"${KSYSROOT_TRIPLE}"/pkgconfig

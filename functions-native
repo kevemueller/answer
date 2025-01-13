@@ -9,6 +9,9 @@ ksysroot_native_iterate2() {
 ksysroot_native_iterate3() {
   :
 }
+ksysroot_native_iterate4() {
+  :
+}
 ksysroot_native_iterate() {
   ksysroot_native_iterate1
   ksysroot_native_iterate2

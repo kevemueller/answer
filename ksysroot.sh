@@ -35,6 +35,7 @@ fi
 . "${KSYSROOT_PREFIX}"/functions-DragonFlyBSD
 . "${KSYSROOT_PREFIX}"/functions-FreeBSD
 . "${KSYSROOT_PREFIX}"/functions-NetBSD
+. "${KSYSROOT_PREFIX}"/functions-OpenBSD
 
 ksysroot_test_wrapper() {
   local ksysroot_dir="$1"
@@ -112,7 +113,7 @@ ksysroot_test_pkgconf() {
       pkg_lib="libcrypt"
       pkg_exp="-lcrypt"
       ;;
-    DragonFlyBSD | FreeBSD)
+    DragonFlyBSD | FreeBSD | OpenBSD)
       pkg_lib="libcrypto"
       pkg_exp="-lcrypto"
       ;;
@@ -134,15 +135,6 @@ ksysroot_test() {
   ksysroot_test_wrapper "$@"
   ksysroot_test_pkgconf "$@"
   ksysroot_test_meson "$@"
-}
-
-test_all() {
-  test_sysroot native
-
-  # add from Alpine or OpenWRT
-  # x86_64-linux-musl
-  # arm-linux-musleabi
-  # arm-linux-musleabihf
 }
 
 usage() {
@@ -182,6 +174,7 @@ dispatch() {
         ksysroot_DragonFlyBSD_"${cmd}"
         ksysroot_FreeBSD_"${cmd}"
         ksysroot_NetBSD_"${cmd}"
+        ksysroot_OpenBSD_"${cmd}"
       } | grep -iE "${filter}"
       ;;
     *)
@@ -189,7 +182,7 @@ dispatch() {
         *linux*-musl* | *@Alpine*)
           ksysroot_Alpine_"${cmd}" "$@"
           ;;
-        *linux*-gnu* | *@Debian*)
+        *linux*-gnu* | *@Debian* | *gnu | *@Hurd)
           ksysroot_Debian_"${cmd}" "$@"
           ;;
         *freebsd* | *FreeBSD*)
@@ -200,6 +193,9 @@ dispatch() {
           ;;
         *netbsd* | *NetBSD*)
           ksysroot_NetBSD_"${cmd}" "$@"
+          ;;
+        *openbsd* | *OpenBSD*)
+          ksysroot_OpenBSD_"${cmd}" "$@"
           ;;
         native)
           ksysroot_native_"${cmd}" "$@"

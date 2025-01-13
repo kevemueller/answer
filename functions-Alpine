@@ -61,6 +61,10 @@ ksysroot_Alpine_iterate3() {
   done
 }
 
+ksysroot_Alpine_iterate4() {
+  :
+}
+
 ksysroot_Alpine_iterate() {
   ksysroot_Alpine_iterate1
   ksysroot_Alpine_iterate2

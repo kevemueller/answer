@@ -27,6 +27,9 @@ ksysroot_DragonFlyBSD_iterate2() {
 ksysroot_DragonFlyBSD_iterate3() {
   :
 }
+ksysroot_DragonFlyBSD_iterate4() {
+  :
+}
 
 ksysroot_DragonFlyBSD_iterate() {
   ksysroot_DragonFlyBSD_iterate1

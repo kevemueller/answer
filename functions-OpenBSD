@@ -1,0 +1,163 @@
+# shellcheck shell=sh
+set -e
+
+OPENBSD_TIER2=""
+OPENBSD_TIER3=""
+
+OPENBSD_PRODUCTION1="7.6"
+OPENBSD_PRODUCTION2=""
+OPENBSD_SNAP=""
+
+openbsd_flavour() {
+  printf "%s-openbsd%s@OpenBSD-%s\n" "$1" "$2" "$2"
+}
+
+# OpenBSD Tier 1 platforms on most recent supported Release
+ksysroot_OpenBSD_iterate1() {
+  local arch_type version
+
+  for arch_type in ${COMMON_TIER1}; do
+    for version in ${OPENBSD_PRODUCTION1}; do
+      openbsd_flavour "${arch_type}" "${version}"
+    done
+  done
+}
+
+# OpenBSD Tier 1 platforms on legacy supported Releases + snapshots
+# OpenBSD Tier 2 platforms on most recent supported Releases
+ksysroot_OpenBSD_iterate2() {
+  local arch_type version
+
+  for arch_type in ${COMMON_TIER1}; do
+    for version in ${OPENBSD_PRODUCTION2} ${OPENBSD_SNAP}; do
+      openbsd_flavour "${arch_type}" "${version}"
+    done
+  done
+  for arch_type in ${OPENBSD_TIER2}; do
+    for version in ${OPENBSD_PRODUCTION1}; do
+      openbsd_flavour "${arch_type}" "${version}"
+    done
+  done
+}
+
+# OpenBSD Tier 2 platforms on legacy supported Releases + snapshots
+# OpenBSD Tier 3 platforms on most recent supported Releases
+ksysroot_OpenBSD_iterate3() {
+  local arch_type version
+
+  for arch_type in ${OPENBSD_TIER2}; do
+    for version in ${OPENBSD_PRODUCTION2} ${OPENBSD_SNAP}; do
+      openbsd_flavour "${arch_type}" "${version}"
+    done
+  done
+  for arch_type in ${OPENBSD_TIER3}; do
+    for version in ${OPENBSD_PRODUCTION1}; do
+      openbsd_flavour "${arch_type}" "${version}"
+    done
+  done
+}
+
+ksysroot_OpenBSD_iterate4() {
+  :
+}
+
+ksysroot_OpenBSD_iterate() {
+  ksysroot_OpenBSD_iterate1
+  ksysroot_OpenBSD_iterate2
+  ksysroot_OpenBSD_iterate3
+}
+
+# $1 - flavoured base triple
+ksysroot_OpenBSD_meta() {
+  local basetriple="${1%@*}"
+  local flavour="${1#*@}"
+
+  if [ "${basetriple}" = "${flavour}" ]; then
+    OPENBSD_KERNEL="${basetriple##*openbsd}"
+    flavour=OpenBSD-${OPENBSD_KERNEL:-7.6}
+  fi
+  OPENBSD_VERSION="${flavour#OpenBSD-}"
+  OPENBSD_KERNEL="${OPENBSD_VERSION%%-*}"
+
+  case "${basetriple}" in
+    aarch64*)
+      OPENBSD_PORT=arm64
+      MESON_CPUFAMILY="aarch64"
+      basetriple="aarch64-openbsd${OPENBSD_KERNEL}"
+      ;;
+    amd64* | x86_64*)
+      OPENBSD_PORT=amd64
+      MESON_CPUFAMILY="x86_64"
+      basetriple="x86_64-openbsd${OPENBSD_KERNEL}"
+      ;;
+    *)
+      echo Unknown OPENBSD_PORT "${basetriple}"
+      return 1
+      ;;
+  esac
+
+  MESON_CPU=${MESON_CPUFAMILY}
+  : "${MESON_ENDIAN:=little}"
+  MESON_SYSTEM="openbsd"
+
+  KSYSROOT_OSFLAVOUR="OpenBSD"
+  KSYSROOT_OSRELEASE="${OPENBSD_VERSION}"
+  KSYSROOT_TRIPLE="${basetriple}"
+  KSYSROOT_FULL_TRIPLE="${basetriple}"
+  KSYSROOT_LINKER="ld.lld"
+  KSYSROOT_LICENSE="BSD-4-Clause-UC"
+}
+
+# $1 - flavoured base triple
+# emits the URLs that are required to build the sysroot
+ksysroot_OpenBSD_bom() {
+  ksysroot_OpenBSD_meta "$1"
+
+  local openbsd_base_url
+  local openbsd_cache_file_prefix
+  local manifest_file
+
+  openbsd_base_url="https://cdn.openbsd.org/pub/${KSYSROOT_OSFLAVOUR}/${KSYSROOT_OSRELEASE}/${OPENBSD_PORT}"
+  openbsd_cache_file_prefix="OpenBSD/${OPENBSD_PORT}_${OPENBSD_VERSION}-"
+
+  manifest_url="https://cdn.openbsd.org/pub/OpenBSD/security/hashes/${KSYSROOT_OSFLAVOUR}-${KSYSROOT_OSRELEASE}_hashes.asc"
+  manifest_file=$(cache "${openbsd_base_url}/SHA256" "OpenBSD/${OPENBSD_PORT}_${OPENBSD_VERSION}-SHA256")
+
+  ksysroot_bomconstants
+  printf "# OPENBSD_VERSION=%s OPENBSD_KERNEL=%s OPENBSD_PORT=%s\n" "${OPENBSD_VERSION}" "${OPENBSD_KERNEL}" "${OPENBSD_PORT}"
+  local suffix
+  suffix="$(echo "${OPENBSD_VERSION}" | tr -d '.')"
+
+  local ball_sha256
+  for ball in "base${suffix}.tgz" "comp${suffix}.tgz"; do
+    ball_sha256=$(sed -nE "s%^SHA256 \(${ball}\)[[:space:]]*=[[:space:]]*([0-9a-fA-F]{64}).*%\1%p" "${manifest_file}")
+
+    printf "%s %s %s %s %s\n" "${ball}" "${OPENBSD_VERSION}" \
+      "${openbsd_base_url}/${ball}" \
+      "${openbsd_cache_file_prefix}${ball}" \
+      "${ball_sha256}"
+  done
+}
+
+ksysroot_OpenBSD_bomresource() {
+  local _pkg="$1"
+  local version="$2"
+  local url="$3"
+  local file="$4"
+  local sha512="$5"
+
+  local resource_file
+  resource_file="$(cache "${url}" "${file}" "${sha512}")"
+  ${TAR} -C "${KSYSROOT_SYSROOT}" -xf "${resource_file}" ./lib ./usr/lib ./usr/local/lib ./usr/include ./usr/local/include 2>/dev/null || true
+}
+
+ksysroot_OpenBSD_bomclose() {
+  # Brew removes empty directories, keep them
+  ${FIND} "${KSYSROOT_SYSROOT}" -type d -empty | ${XARGS} -I'{}' touch '{}'/.empty
+  fix_abs_link "${KSYSROOT_SYSROOT}"
+  ksysroot_emit /usr/lib /usr/local/lib -- /usr/include /usr/local/include -- /usr/lib/pkgconfig /usr/local/lib/pkgconfig
+}
+
+ksysroot_OpenBSD_install() {
+  ksysroot_OpenBSD_bom "$1" | ksysroot_frombom "${2:-ksysroot-$1}" "$3"
+}
