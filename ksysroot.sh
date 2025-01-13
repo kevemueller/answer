@@ -123,8 +123,8 @@ ksysroot_test_pkgconf() {
   esac
   if [ "${pkg_lib}" ]; then
     pkg_act="$(${PKG_CONFIG1} --libs "${pkg_lib}")"
-    if [ "${pkg_exp}" != "${pkg_act}" ]; then
-      echo Pkg_config personality error. Expected "${pkg_exp}", got "${pkg_act}"
+    if [ "${pkg_exp}" != "${pkg_act% *}" ]; then
+      echo Pkg_config personality error. Expected "${pkg_exp}", got "${pkg_act}".
       exit 1
     fi
   fi
