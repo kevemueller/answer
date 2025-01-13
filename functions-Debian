@@ -333,17 +333,6 @@ ksysroot_Debian_meta() {
   KSYSROOT_LICENSE="GPL-2.0-or-later"
 }
 
-debian_quirks() {
-  # case "${KSYSROOT_TRIPLE}" in
-  #   powerpc64le-linux-gnu | s390x-linux-gnu)
-  #     KSYSROOT_COMMON_QUIRK_ARGS_MESON="'--gcc-install-dir=' + sysroot / 'usr/lib/gcc/${KSYSROOT_TRIPLE}/${DEBIAN_GCC}'"
-  #     KSYSROOT_COMMON_QUIRK_ARGS_WRAP="--gcc-install-dir=\"${KSYSROOT_SYSROOT}/usr/lib/gcc/${KSYSROOT_TRIPLE}/${DEBIAN_GCC}\""
-  #     ;;
-  #   *) ;;
-  # esac
-  :
-}
-
 call_debootstrap() {
   local cache_dir_abs
   cache_dir_abs="$(readlink -f "${CACHE_DIR}")"
@@ -361,7 +350,7 @@ EOF
 
   FORCE_REQUIRED="libstdc++-${DEBIAN_GCC}-dev ${KSYSROOT_ADD_PKG}" 1>&2 ${FAKEROOT} "${DEBOOTSTRAP}" \
     "$@" --arch="${DEBIAN_ARCH}" \
-    --cache-dir="${cache_dir_abs}"/debian \
+    --cache-dir="${cache_dir_abs}"/Debian \
     "${DEBIAN_NAME}" "${db_tmp}" \
     http://deb.debian.org/debian "${mixin}"
 
@@ -377,7 +366,7 @@ debian_emit_bom() {
     while read -r pkg version url pkgd file; do
       test "${pkg}" = "${pkgd}" || echo mismatch at "${pkg}"
       # 1>&2 echo PKG="${pkg}" URL="${url}" FILE="$(basename "${file}")"
-      debfile="debian/$(basename "${file}")"
+      debfile="Debian/$(basename "${file}")"
       sha256="$(shacompute "${CACHE_DIR}/${debfile}")"
       printf "%s %s %s %s %s\n" "${pkg}" "${version}" "${url}" "${debfile}" "${sha256}"
     done
@@ -395,13 +384,12 @@ debian_fixup() {
   KSYSROOT_TRIPLE="$(basename "$(ls -d "${KSYSROOT_SYSROOT}"/usr/lib/*gnu*)")"
   KSYSROOT_FULL_TRIPLE="$(printf "%s" "${KSYSROOT_TRIPLE}" | sed "s/linux/linux${LINUX_VERSION}/")"
 
-  debian_quirks
-  ksysroot_emit /usr/lib/"${KSYSROOT_TRIPLE}" /usr/lib/"${KSYSROOT_TRIPLE}"/pkgconfig
+  ksysroot_emit /usr/lib/"${KSYSROOT_TRIPLE}" -- /usr/include -- /usr/lib/"${KSYSROOT_TRIPLE}"/pkgconfig
 }
 
 # $1 - flavoured base triple
 # emits metadata and URLs that are required to build the sysroot
-# caches the downloaded DEBs in ${CACHE_DIR}/debian
+# caches the downloaded DEBs in ${CACHE_DIR}/Debian
 # slow, as it needs to obtain archive index and download all DEBs
 ksysroot_Debian_bom() {
   : "${DEBOOTSTRAP:=$(require_tool debootstrap /usr/local/sbin /usr/sbin)}"
@@ -409,7 +397,7 @@ ksysroot_Debian_bom() {
   local db_tmp
 
   ksysroot_Debian_meta "$1"
-  mkdir -p "${CACHE_DIR}"/debian
+  mkdir -p "${CACHE_DIR}"/Debian
 
   db_tmp="$(call_debootstrap --download-only)"
 
@@ -465,7 +453,7 @@ ksysroot_Debian_install() {
 
   ksysroot_Debian_meta "$1"
 
-  mkdir -p "${CACHE_DIR}"/debian
+  mkdir -p "${CACHE_DIR}"/Debian
 
   if ${DEBOOTSTRAP} --help | grep "unprivileged" >/dev/null; then
     db_tmp="$(call_debootstrap --unprivileged --merged-usr --foreign)"

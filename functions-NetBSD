@@ -157,7 +157,7 @@ ksysroot_NetBSD_bomclose() {
   ${FIND} "${KSYSROOT_SYSROOT}" -type d -empty | ${XARGS} -I'{}' touch '{}'/.empty
   fix_abs_link "${KSYSROOT_SYSROOT}"
   netbsd_quirks
-  ksysroot_emit /usr/lib /usr/no-pkg-config
+  ksysroot_emit /usr/lib -- /usr/include -- /usr/no-pkg-config
 }
 
 ksysroot_NetBSD_install() {

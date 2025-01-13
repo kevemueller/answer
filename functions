@@ -143,11 +143,6 @@ fix_abs_link() {
 # we use the wrappers
 emit_meta_env() {
   local wrapname="$1"
-  local sysroot=
-
-  if [ "${KSYSROOT_TRIPLE}" != "native" ]; then
-    sysroot="KSYSROOT_SYSROOT=\"${KSYSROOT_SYSROOT}\""
-  fi
 
   cat <<EOF
 #!/bin/sh
@@ -155,10 +150,19 @@ if [ \$# -ne 0 ]; then
   set -a
 fi
 
-KSYSROOT_PREFIX="${KSYSROOT_PREFIX_ABS}"
 KSYSROOT_TRIPLE="${KSYSROOT_TRIPLE}"
+KSYSROOT_PREFIX="${KSYSROOT_PREFIX_ABS}"
+EOF
+  if [ "${KSYSROOT_TRIPLE}" != "native" ]; then
+    cat <<EOF
 KSYSROOT_FULL_TRIPLE="${KSYSROOT_FULL_TRIPLE}"
-${sysroot}
+KSYSROOT_SYSROOT="${KSYSROOT_SYSROOT}"
+KSYSROOT_OSFLAVOUR="${KSYSROOT_OSFLAVOUR}"
+KSYSROOT_OSRELEASE="${KSYSROOT_OSRELEASE}"
+EOF
+  fi
+
+  cat <<EOF
 
 LLVM_BINDIR="${LLVM_DIR}"
 LLD_BINDIR="${LLD_DIR}"
@@ -194,20 +198,44 @@ EOF
 }
 
 # emit cross pkg-config personality
-# $1 - libpath
-# $@ - pkgconfig_paths
+# $* - libpaths
+# --
+# $* - includepaths
+# --
+# $* - pkgconfig_paths
 emit_meta_pc() {
-  local libpath="$1"
-  shift 1
+  local lib_paths=
+  while [ $# -gt 0 ]; do
+    if [ "$1" = "--" ]; then
+      shift
+      break
+    fi
+    lib_paths="${lib_paths}:${KSYSROOT_SYSROOT}$1"
+    shift
+  done
+
+  local include_paths=
+  while [ $# -gt 0 ]; do
+    if [ "$1" = "--" ]; then
+      shift
+      break
+    fi
+    include_paths="${include_paths}:${KSYSROOT_SYSROOT}$1"
+    shift
+  done
+
   local pkgconfig_paths
-  pkgconfig_paths="$(join_with_prefix : "${KSYSROOT_SYSROOT}" "$@")"
+  while [ $# -gt 0 ]; do
+    pkgconfig_paths="${pkgconfig_paths}:${KSYSROOT_SYSROOT}$1"
+    shift
+  done
 
   cat <<EOF
-Triplet: ${KSYSROOT_FULL_TRIPLE}
+Triplet: ${KSYSROOT_TRIPLE}
 SysrootDir: ${KSYSROOT_SYSROOT}
-DefaultSearchPaths: ${pkgconfig_paths}
-SystemIncludePaths: ${KSYSROOT_SYSROOT}/usr/include
-SystemLibraryPaths: ${KSYSROOT_SYSROOT}${libpath}
+DefaultSearchPaths: ${pkgconfig_paths#:}
+SystemIncludePaths: ${include_paths#:}
+SystemLibraryPaths: ${lib_paths#:}
 EOF
 }
 
@@ -227,11 +255,11 @@ emit_meta_llvm() {
   if [ "${name}" = "native" ]; then
     pkg_config="'${PKG_CONFIG}'"
     ld="${NATIVE_LINKER}"
-    ksysroot_dir=
+    ksysroot=
   else
-    pkg_config="ksysroot_dir_${name} / 'bin' / triple + '-pkg-config'"
+    pkg_config="ksysroot_prefix_${name} / 'bin' / triple + '-pkg-config'"
     ld="${KSYSROOT_LINKER}"
-    ksysroot_dir="ksysroot_dir_${name} = '${KSYSROOT_PREFIX_ABS}'"
+    ksysroot="ksysroot_prefix_${name} = '${KSYSROOT_PREFIX_ABS}'"
   fi
 
   cat <<EOF
@@ -259,33 +287,54 @@ strip = llvm_bindir_${name} / 'llvm-strip'
 [constants]
 llvm_bindir_${name} = '${LLVM_DIR}'
 lld_bindir_${name} = '${LLD_DIR}'
-${ksysroot_dir}
+${ksysroot}
 EOF
+
 }
 
 # emit meson cross files (complete with generic part)
 # $1 - name
-# $@ - pkg_config paths
+# $* - libpaths
+# --
+# $* - includepaths
+# --
+# $* - pkgconfig_paths
 emit_meta_llvm_cross() {
   local name="$1"
   shift
-  local first=yes
 
-  for i in "$@"; do
-    if [ "${first}" = "yes" ]; then
-      set --
-      first=no
+  # lib
+  while [ $# -gt 0 ]; do
+    if [ "$1" = "--" ]; then
+      shift
+      break
     fi
-    set -- "$@" \'"${i#/}"\'
+    shift
   done
-  local pkgconfig_paths
-  pkgconfig_paths="$(join_with_prefix " + ':' + " "sysroot / " "$@")"
+  # include
+  while [ $# -gt 0 ]; do
+    if [ "$1" = "--" ]; then
+      shift
+      break
+    fi
+    shift
+  done
+  local pkgconfig_paths=
+  local delim=
+  while [ $# -gt 0 ]; do
+    pkgconfig_paths="${pkgconfig_paths}${delim}sysroot / '${1#/}'"
+    delim=" + ':' + "
+    shift
+  done
 
   emit_meta_llvm "${name}"
 
   cat <<EOF
 triple = '${KSYSROOT_TRIPLE}'
 sysroot = '${KSYSROOT_SYSROOT}'
+ksysroot_full_triple_${name} = '${KSYSROOT_FULL_TRIPLE}'
+ksysroot_osflavour_${name} = '${KSYSROOT_OSFLAVOUR}'
+ksysroot_osrelease_${name} = '${KSYSROOT_OSRELEASE}'
 common_quirk_args = [${KSYSROOT_COMMON_QUIRK_ARGS_MESON}]
 common_args = ['-target', triple, '--sysroot=' + sysroot] + common_quirk_args
 cpp_quirk_args = [${KSYSROOT_CPP_QUIRK_ARGS_MESON}]
@@ -365,16 +414,16 @@ ksysroot_prefix() {
   KSYSROOT_SYSROOT="${KSYSROOT_PREFIX_ABS}/cross"
 }
 
-# $1 - libpath
-# $@ - pkg-config-paths
+# $* - libpaths
+# --
+# $* - includepaths
+# --
+# $* - pkgconfig_paths
 ksysroot_emit() {
   mk_wrappers
   emit_meta_llvm native >"${KSYSROOT_PREFIX}"/native.txt
   if [ "${KSYSROOT_TRIPLE}" != "native" ]; then
-    local libpath="$1"
-    shift
-
-    emit_meta_pc "${libpath}" "$@" >"${KSYSROOT_PREFIX}"/pkg-config.personality
+    emit_meta_pc "$@" >"${KSYSROOT_PREFIX}"/pkg-config.personality
     emit_meta_llvm_cross cross "$@" >"${KSYSROOT_PREFIX}"/cross.txt
   fi
 }
