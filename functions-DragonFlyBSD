@@ -105,7 +105,7 @@ ksysroot_DragonFlyBSD_bomclose() {
   # Brew removes empty directories, keep them
   ${FIND} "${KSYSROOT_SYSROOT}" -type d -empty | ${XARGS} -I'{}' touch '{}'/.empty
   # fix_abs_link "${KSYSROOT_SYSROOT}"
-  ksysroot_emit /usr/lib /usr/libdata/pkgconfig /usr/local/libdata/pkgconfig
+  ksysroot_emit /usr/lib /usr/local/lib -- /usr/include /usr/local/include -- /usr/libdata/pkgconfig /usr/local/libdata/pkgconfig
 }
 
 ksysroot_DragonFlyBSD_install() {

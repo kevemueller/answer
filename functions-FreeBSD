@@ -208,7 +208,7 @@ ksysroot_FreeBSD_bom() {
       ;;
   esac
   freebsd_base_url="${freebsd_base_url}/${FREEBSD_MACHINE}/${FREEBSD_MACHINE_ARCH}/${FREEBSD_VERSION}"
-  freebsd_cache_file_prefix="freebsd/${FREEBSD_MACHINE}_${FREEBSD_MACHINE_ARCH}_freebsd${FREEBSD_VERSION}-"
+  freebsd_cache_file_prefix="FreeBSD/${FREEBSD_MACHINE}_${FREEBSD_MACHINE_ARCH}_freebsd${FREEBSD_VERSION}-"
   manifest_file=$(cache "${freebsd_base_url}/MANIFEST" "${freebsd_cache_file_prefix}manifest")
   base_sha256=$(sed -nE 's/^base.txz[[:space:]]+([0-9a-fA-F]{64}).*/\1/p' "${manifest_file}")
 
@@ -237,7 +237,7 @@ ksysroot_FreeBSD_bomclose() {
   ${FIND} "${KSYSROOT_SYSROOT}" -type d -empty | ${XARGS} -I'{}' touch '{}'/.empty
   fix_abs_link "${KSYSROOT_SYSROOT}"
   freebsd_quirks
-  ksysroot_emit /usr/lib /usr/local/libdata/pkgconfig /usr/libdata/pkgconfig
+  ksysroot_emit /usr/lib /usr/local/lib -- /usr/include /usr/local/include -- /usr/local/libdata/pkgconfig /usr/libdata/pkgconfig
 }
 
 ksysroot_FreeBSD_install() {

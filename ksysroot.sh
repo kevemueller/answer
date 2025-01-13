@@ -81,17 +81,53 @@ ksysroot_test_pkgconf() {
   echo envfile is "${env}"
   # shellcheck disable=SC2016
   PKG_CONFIG1="$("${env}" sh -c 'echo ${PKG_CONFIG}')"
-  test -z "${CC}" || echo Should not have leaked \$CC
+  test -z "${CC}" || {
+    echo Should not have leaked \$CC
+    exit 1
+  }
   echo PKG_CONFIG="${PKG_CONFIG1}"
 
-  # shellcheck disable=SC1090
+  # shellcheck source=/dev/null
   PKG_CONFIG2="$(set -- && . "${env}" && echo "${PKG_CONFIG}")"
-  test -z "${CC}" || echo Should not have leaked \$CC
+  test -z "${CC}" || {
+    echo Should not have leaked \$CC
+    exit 1
+  }
   echo PKG_CONFIG="${PKG_CONFIG2}"
 
-  test "${PKG_CONFIG1}" = "${PKG_CONFIG2}" || echo Should be the same "${PKG_CONFIG1}" = "${PKG_CONFIG2}"
+  test "${PKG_CONFIG1}" = "${PKG_CONFIG2}" || {
+    echo Should be the same "${PKG_CONFIG1}" = "${PKG_CONFIG2}"
+    exit 1
+  }
 
   "${PKG_CONFIG1}" --list-all
+
+  local KSYSROOT_OSFLAVOUR
+  local pkg_lib pkg_exp pkg_act
+
+  # shellcheck disable=SC2016
+  KSYSROOT_OSFLAVOUR="$("${env}" sh -c 'echo ${KSYSROOT_OSFLAVOUR}')"
+  case "${KSYSROOT_OSFLAVOUR}" in
+    Debian)
+      pkg_lib="libcrypt"
+      pkg_exp="-lcrypt"
+      ;;
+    DragonFlyBSD | FreeBSD)
+      pkg_lib="libcrypto"
+      pkg_exp="-lcrypto"
+      ;;
+    *)
+      pkg_lib=
+      pkg_exp=
+      ;;
+  esac
+  if [ "${pkg_lib}" ]; then
+    pkg_act="$(${PKG_CONFIG1} --libs "${pkg_lib}")"
+    if [ "${pkg_exp}" != "${pkg_act}" ]; then
+      echo Pkg_config personality error. Expected "${pkg_exp}", got "${pkg_act}"
+      exit 1
+    fi
+  fi
 }
 
 ksysroot_test() {

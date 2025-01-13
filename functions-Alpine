@@ -229,7 +229,7 @@ ksysroot_Alpine_bomclose() {
   # Brew removes empty directories, keep them
   ${FIND} "${KSYSROOT_SYSROOT}" -type d -empty | ${XARGS} -I'{}' touch '{}'/.empty
   fix_abs_link "${KSYSROOT_SYSROOT}"
-  ksysroot_emit /usr/lib /usr/lib/pkgconfig
+  ksysroot_emit /usr/lib -- /usr/include -- /usr/lib/pkgconfig
 }
 
 ksysroot_Alpine_install() {
