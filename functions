@@ -257,7 +257,7 @@ emit_meta_llvm() {
     ld="${NATIVE_LINKER}"
     ksysroot=
   else
-    pkg_config="ksysroot_dir_${name} / 'bin' / triple + '-pkg-config'"
+    pkg_config="ksysroot_prefix_${name} / 'bin' / triple + '-pkg-config'"
     ld="${KSYSROOT_LINKER}"
     ksysroot="ksysroot_prefix_${name} = '${KSYSROOT_PREFIX_ABS}'"
   fi
